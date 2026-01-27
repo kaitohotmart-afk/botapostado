@@ -2,7 +2,7 @@ import { VercelRequest, VercelResponse } from '@vercel/node';
 import { InteractionResponseType } from 'discord-interactions';
 import { handleAcceptBet } from './acceptBet.js';
 import { handleCancelBet } from './cancelBet.js';
-import { handleAdminAction, handleSelectWinner, handleCloseChannel, handleSelectWinnerType } from './adminActions.js';
+import { handleAdminAction, handleSelectWinner, handleCloseChannel, handleSelectWinnerType, handlePaymentMethod } from './adminActions.js';
 
 export async function handleComponent(req: VercelRequest, res: VercelResponse, interaction: any) {
     const { custom_id } = interaction.data;
@@ -10,6 +10,11 @@ export async function handleComponent(req: VercelRequest, res: VercelResponse, i
     if (custom_id.startsWith('accept_bet:')) {
         const betId = custom_id.split(':')[1];
         return handleAcceptBet(req, res, interaction, betId);
+    }
+
+    if (custom_id.startsWith('payment_method:')) {
+        const [_, admin, betId] = custom_id.split(':');
+        return handlePaymentMethod(req, res, interaction, admin, betId);
     }
 
     if (custom_id.startsWith('cancel_bet:')) {

@@ -3,6 +3,7 @@ import { InteractionResponseType, MessageComponentTypes, ButtonStyleTypes } from
 import { supabase } from '../utils/supabase.js';
 import { rest } from '../utils/discord.js';
 import { Routes } from 'discord.js';
+import { isPlayerBlocked } from '../utils/faults.js';
 
 export async function handleAcceptBet(req: VercelRequest, res: VercelResponse, interaction: any, betId: string) {
     const { member, guild_id } = interaction;
@@ -36,6 +37,38 @@ export async function handleAcceptBet(req: VercelRequest, res: VercelResponse, i
             return res.status(200).json({
                 type: InteractionResponseType.CHANNEL_MESSAGE_WITH_SOURCE,
                 data: { content: '✅ Você já aceitou esta aposta.', flags: 64 }
+            });
+        }
+
+        // 2.1 Anti-Spam Check: Limit of 2 active participations
+        const { count: participationCount, error: partError } = await supabase
+            .from('bets')
+            .select('*', { count: 'exact', head: true })
+            .or(`jogador1_id.eq.${discordId},jogador2_id.eq.${discordId}`)
+            .not('status', 'in', '("finalizada", "cancelada")');
+
+        if (partError) {
+            console.error('Error counting participations:', partError);
+        } else if (participationCount !== null && participationCount >= 2) {
+            return res.status(200).json({
+                type: InteractionResponseType.CHANNEL_MESSAGE_WITH_SOURCE,
+                data: {
+                    content: '❌ Você já está participando de 2 apostas ativas. Finalize uma antes de entrar em outra.',
+                    flags: 64
+                }
+            });
+        }
+
+        // 2.2 Block Check
+        const blockStatus = await isPlayerBlocked(discordId);
+        if (blockStatus.blocked) {
+            const untilDate = new Date(blockStatus.until!).toLocaleString('pt-MZ');
+            return res.status(200).json({
+                type: InteractionResponseType.CHANNEL_MESSAGE_WITH_SOURCE,
+                data: {
+                    content: `❌ Você está bloqueado de participar de apostas até **${untilDate}** devido ao acúmulo de faltas.`,
+                    flags: 64
+                }
             });
         }
 
@@ -162,15 +195,20 @@ export async function handleAcceptBet(req: VercelRequest, res: VercelResponse, i
                     type: 1,
                     deny: DENY_SEND,
                     allow: ALLOW_VIEW_ONLY,
-                },
-                {
-                    id: bet.criador_admin_id,
-                    type: 1,
-                    deny: '0',
-                    allow: ALLOW_VIEW_SEND,
-                },
+                }
             ],
         };
+
+        // If creator is NOT one of the players, add them with full access (assuming they are admin/staff)
+        // If they ARE a player, they already have limited access above.
+        if (bet.criador_admin_id !== player1Id && bet.criador_admin_id !== player2Id) {
+            channelData.permission_overwrites.push({
+                id: bet.criador_admin_id,
+                type: 1,
+                deny: '0',
+                allow: ALLOW_VIEW_SEND,
+            });
+        }
 
         const channel: any = await rest.post(Routes.guildChannels(guild_id), { body: channelData });
 
@@ -179,7 +217,8 @@ export async function handleAcceptBet(req: VercelRequest, res: VercelResponse, i
             .from('bets')
             .update({
                 status: 'aceita',
-                canal_pagamento_id: channel.id
+                canal_pagamento_id: channel.id,
+                aceita_em: new Date().toISOString()
             })
             .eq('id', betId);
 
@@ -188,10 +227,11 @@ export async function handleAcceptBet(req: VercelRequest, res: VercelResponse, i
         // 9. Send info to channel
         const modoSalaText = bet.modo_sala === 'full_mobile' ? '📱 FULL MOBILE' : '📱💻 MISTO (Mobile + Emulador)';
         const modoNome = bet.modo.replace('_', ' ').toUpperCase();
+        const estiloSalaText = bet.estilo_sala === 'tatico' ? '🎯 TÁTICO' : '🎮 NORMAL';
 
         await rest.post(Routes.channelMessages(channel.id), {
             body: {
-                content: `Aposta iniciada! Aguardando pagamento.`,
+                content: `📌 **Aposta criada por:** <@${bet.criador_admin_id}>\n\nAposta iniciada! Aguardando pagamento.`,
                 embeds: [
                     {
                         title: '⚔️ PARTIDA ACEITA',
@@ -200,21 +240,46 @@ export async function handleAcceptBet(req: VercelRequest, res: VercelResponse, i
                         fields: [
                             { name: 'Modo', value: modoNome, inline: true },
                             { name: 'Valor', value: `${bet.valor} MZN`, inline: true },
-                            { name: 'Tipo de Sala', value: modoSalaText, inline: false },
+                            { name: 'Tipo de Sala', value: modoSalaText, inline: true },
+                            { name: 'Estilo', value: estiloSalaText, inline: true },
                         ]
                     },
                     {
-                        title: '💳 INFORMAÇÕES DE PAGAMENTO',
-                        description: 'Para realizar os pagamentos das apostas, utilize um dos seguintes números:\n\n**e-Mola:**\n`877771719`\n\n**M-Pesa:**\n`842482984`\n\n**Titular:** Kaito Luis\n\nSomente após a confirmação do pagamento a aposta será validada e o chat será liberado.',
+                        title: '💳 MÉTODOS DE PAGAMENTO (ADMIN)',
+                        description: 'Selecione um administrador para ver os dados de pagamento:',
                         color: 0x3498DB,
-                    },
-                    {
-                        title: '📝 COMO FUNCIONA',
-                        description: '1. Ambos jogadores enviam o valor\n2. Aguarde confirmação do admin\n3. **Admin confirma → Chat é liberado**\n4. Criem a sala no Free Fire\n5. Joguem a partida\n6. Enviem o print do resultado\n7. O vencedor recebe o prêmio',
-                        color: 0x9B59B6
                     }
                 ],
                 components: [
+                    {
+                        type: MessageComponentTypes.ACTION_ROW,
+                        components: [
+                            {
+                                type: MessageComponentTypes.BUTTON,
+                                style: ButtonStyleTypes.SECONDARY,
+                                label: 'Pagamento - Aleek',
+                                custom_id: `payment_method:aleek:${betId}`,
+                            },
+                            {
+                                type: MessageComponentTypes.BUTTON,
+                                style: ButtonStyleTypes.SECONDARY,
+                                label: 'Pagamento - Carlos',
+                                custom_id: `payment_method:carlos:${betId}`,
+                            },
+                            {
+                                type: MessageComponentTypes.BUTTON,
+                                style: ButtonStyleTypes.SECONDARY,
+                                label: 'Pagamento - Lilas',
+                                custom_id: `payment_method:lilas:${betId}`,
+                            },
+                            {
+                                type: MessageComponentTypes.BUTTON,
+                                style: ButtonStyleTypes.SECONDARY,
+                                label: 'Pagamento - Ryzen',
+                                custom_id: `payment_method:ryzen:${betId}`,
+                            }
+                        ]
+                    },
                     {
                         type: MessageComponentTypes.ACTION_ROW,
                         components: [

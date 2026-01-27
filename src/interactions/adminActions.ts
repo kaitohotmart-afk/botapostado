@@ -4,6 +4,7 @@ import { supabase } from '../utils/supabase.js';
 import { rest } from '../utils/discord.js';
 import { Routes } from 'discord.js';
 import { updatePlayerLevel, incrementPlayerStats } from '../utils/levels.js';
+import { addCreatorRole } from '../utils/roles.js';
 
 // Helper to check for Admin/Staff permissions
 async function checkAdminPermission(interaction: any): Promise<boolean> {
@@ -53,7 +54,11 @@ export async function handleAdminAction(req: VercelRequest, res: VercelResponse,
             // Update bet status
             const { error } = await supabase
                 .from('bets')
-                .update({ status: 'paga' })
+                .update({
+                    status: 'paga',
+                    p1_pagou: true,
+                    p2_pagou: true
+                })
                 .eq('id', betId);
 
             if (error) throw error;
@@ -89,7 +94,10 @@ export async function handleAdminAction(req: VercelRequest, res: VercelResponse,
         if (action === 'start_match') {
             const { error } = await supabase
                 .from('bets')
-                .update({ status: 'em_jogo' })
+                .update({
+                    status: 'em_jogo',
+                    partida_iniciada_em: new Date().toISOString()
+                })
                 .eq('id', betId);
 
             if (error) throw error;
@@ -300,7 +308,20 @@ export async function handleSelectWinner(req: VercelRequest, res: VercelResponse
         await incrementPlayerStats(loserId, false, Number(bet.valor), -Number(bet.valor));
         await updatePlayerLevel(loserId, interaction.guild_id);
 
-        // 6. Get Winner Name (Display Name or Username)
+        // 6. Restore "Criador de Apostas" role if applicable
+        if (bet.criador_admin_id) {
+            const { count } = await supabase
+                .from('bets')
+                .select('*', { count: 'exact', head: true })
+                .eq('criador_admin_id', bet.criador_admin_id)
+                .not('status', 'in', '("finalizada", "cancelada")');
+
+            if (count !== null && count < 2) {
+                await addCreatorRole(interaction.guild_id, bet.criador_admin_id);
+            }
+        }
+
+        // 7. Get Winner Name (Display Name or Username)
         let winnerName = `<@${winnerId}>`; // Fallback
         try {
             // Try to fetch guild member for nickname (displayName)
@@ -364,7 +385,7 @@ export async function handleCloseChannel(req: VercelRequest, res: VercelResponse
     if (!isAdmin) {
         return res.status(200).json({
             type: InteractionResponseType.CHANNEL_MESSAGE_WITH_SOURCE,
-            data: { content: '❌ Apenas administradores podem fechar o canal.', flags: 64 }
+            data: { content: '❌ Apenas administradores podem usar este botão.', flags: 64 }
         });
     }
 
@@ -381,4 +402,36 @@ export async function handleCloseChannel(req: VercelRequest, res: VercelResponse
             data: { content: '❌ Erro ao fechar o canal.', flags: 64 }
         });
     }
+}
+
+const PAYMENT_METHODS: Record<string, string> = {
+    aleek: `862521033 - Filipe Alexandre\n852645990 - Pililane M**\nApós o pagamento, envie o comprovativo.`,
+    carlos: `e-Mola: 873768204 - Carlos Antônio\nM-Pesa: 847194062 – Anabela\nEnvie o comprovativo após pagar.`,
+    lilas: `FORMAS DE PAGAMENTO\ne-Mola: 864869900 – Odete Francisco\nM-Pesa: 856673352 – Aly Nangy\nEnvie o comprovativo após pagar.`,
+    ryzen: `853431147 - Munir\n869909720 - Paulino\nEnvie o comprovativo após pagar.`
+};
+
+export async function handlePaymentMethod(req: VercelRequest, res: VercelResponse, interaction: any, admin: string, betId: string) {
+    const isAdmin = await checkAdminPermission(interaction);
+    if (!isAdmin) {
+        return res.status(200).json({
+            type: InteractionResponseType.CHANNEL_MESSAGE_WITH_SOURCE,
+            data: { content: '❌ Apenas administradores podem enviar métodos de pagamento.', flags: 64 }
+        });
+    }
+
+    const method = PAYMENT_METHODS[admin.toLowerCase()];
+    if (!method) {
+        return res.status(200).json({
+            type: InteractionResponseType.CHANNEL_MESSAGE_WITH_SOURCE,
+            data: { content: '❌ Método de pagamento não encontrado.', flags: 64 }
+        });
+    }
+
+    return res.status(200).json({
+        type: InteractionResponseType.CHANNEL_MESSAGE_WITH_SOURCE,
+        data: {
+            content: `💰 **Método de Pagamento - ${admin.charAt(0).toUpperCase() + admin.slice(1)}**\n\n${method}`
+        }
+    });
 }

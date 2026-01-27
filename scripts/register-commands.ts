@@ -33,6 +33,15 @@ const commands = [
                     { name: 'FULL MOBILE', value: 'full_mobile' },
                     { name: 'MISTO (Mobile + Emulador)', value: 'misto' }
                 )
+        )
+        .addStringOption(option =>
+            option.setName('estilo_sala')
+                .setDescription('Estilo da sala')
+                .setRequired(true)
+                .addChoices(
+                    { name: 'Normal', value: 'normal' },
+                    { name: 'Tático', value: 'tatico' }
+                )
         ),
     new SlashCommandBuilder()
         .setName('ranking')

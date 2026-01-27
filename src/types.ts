@@ -7,6 +7,8 @@ export interface Player {
     total_apostado: number;
     total_ganho: number;
     saldo_lucro: number;
+    faltas: number;
+    bloqueado_ate?: string;
     criado_em: string;
 }
 
@@ -19,6 +21,11 @@ export interface Bet {
     status: 'aguardando' | 'aceita' | 'paga' | 'em_jogo' | 'finalizada' | 'cancelada';
     vencedor_id?: string;
     canal_pagamento_id?: string;
+    aceita_em?: string;
+    partida_iniciada_em?: string;
+    p1_pagou: boolean;
+    p2_pagou: boolean;
+    revisao_manual: boolean;
     criado_em: string;
     finalizado_em?: string;
 }
