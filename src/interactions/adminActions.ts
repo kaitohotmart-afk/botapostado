@@ -61,14 +61,16 @@ export async function handleAdminAction(req: VercelRequest, res: VercelResponse,
             // Unlock chat for both players
             const channelId = bet.canal_pagamento_id;
             if (channelId) {
-                const ALLOW_VIEW_SEND = '3072'; // VIEW_CHANNEL + SEND_MESSAGES
+                // VIEW_CHANNEL (1024) + SEND_MESSAGES (2048) + ATTACH_FILES (32768)
+                // Total: 35840
+                const ALLOW_VIEW_SEND_ATTACH = '35840';
 
                 // Update permissions for both players
                 for (const playerId of [bet.jogador1_id, bet.jogador2_id]) {
                     await rest.put(Routes.channelPermission(channelId, playerId), {
                         body: {
                             type: 1, // member
-                            allow: ALLOW_VIEW_SEND,
+                            allow: ALLOW_VIEW_SEND_ATTACH,
                             deny: '0'
                         }
                     });
