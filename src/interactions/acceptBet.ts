@@ -184,11 +184,11 @@ export async function handleAcceptBet(req: VercelRequest, res: VercelResponse, i
 
         await rest.post(Routes.channelMessages(channel.id), {
             body: {
-                content: `<@${player1Id}> <@${player2Id}>`,
+                content: `Aposta iniciada! Aguardando pagamento.`,
                 embeds: [
                     {
                         title: '⚔️ PARTIDA ACEITA',
-                        description: `**Jogador 1:** <@${player1Id}>\n**Jogador 2:** <@${player2Id}>\n\n🔒 **O chat está bloqueado até que o admin confirme o pagamento.**`,
+                        description: `**Jogador 1:** (Oculto)\n**Jogador 2:** (Oculto)\n\n🔒 **O chat está bloqueado até que o admin confirme o pagamento.**`,
                         color: 0x00FF00,
                         fields: [
                             { name: 'Modo', value: modoNome, inline: true },
@@ -198,7 +198,7 @@ export async function handleAcceptBet(req: VercelRequest, res: VercelResponse, i
                     },
                     {
                         title: '💳 INFORMAÇÕES DE PAGAMENTO',
-                        description: 'Para realizar os pagamentos das apostas, utilize um dos seguintes números:\n\n**e-Mola:** `877771719`\n**M-Pesa:** `842482984`\n**Titular:** Kaito Luis\n\nSomente após a confirmação do pagamento a aposta será validada e o chat será liberado.',
+                        description: 'Para realizar os pagamentos das apostas, utilize um dos seguintes números:\n\n**e-Mola:**\n`877771719`\n\n**M-Pesa:**\n`842482984`\n\n**Titular:** Kaito Luis\n\nSomente após a confirmação do pagamento a aposta será validada e o chat será liberado.',
                         color: 0x3498DB,
                     },
                     {

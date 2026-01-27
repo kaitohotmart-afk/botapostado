@@ -22,7 +22,7 @@ export async function handleBetCommand(req: VercelRequest, res: VercelResponse, 
         const roles = interaction.data.resolved.roles;
         hasAdminRole = memberRoles.some((roleId: string) => {
             const role = roles[roleId];
-            return role && (role.name === 'Dono' || role.name === 'botAP');
+            return role && (role.name === 'Dono' || role.name === 'botAP' || role.name === 'Diamante');
         });
     }
 
@@ -30,7 +30,7 @@ export async function handleBetCommand(req: VercelRequest, res: VercelResponse, 
         return res.status(200).json({
             type: InteractionResponseType.CHANNEL_MESSAGE_WITH_SOURCE,
             data: {
-                content: '❌ Apenas administradores ou membros com cargo **Dono**/**botAP** podem criar apostas.',
+                content: '❌ Apenas administradores, membros com cargo **Dono**/**botAP** ou **Diamante** podem criar apostas.',
                 flags: 64
             }
         });

@@ -1,7 +1,7 @@
 import { VercelRequest, VercelResponse } from '@vercel/node';
 import { InteractionResponseType } from 'discord-interactions';
 import { handleBetCommand } from './bet.js';
-import { handleRankingCommand } from './ranking.js';
+import { handleLeaderboardCommand } from './leaderboard.js';
 import { handleProfileCommand } from './profile.js';
 
 export async function handleCommand(req: VercelRequest, res: VercelResponse, interaction: any) {
@@ -12,7 +12,7 @@ export async function handleCommand(req: VercelRequest, res: VercelResponse, int
     }
 
     if (name === 'ranking') {
-        return handleRankingCommand(req, res, interaction);
+        return handleLeaderboardCommand(req, res, interaction);
     }
 
     if (name === 'perfil') {
