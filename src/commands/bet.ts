@@ -6,13 +6,18 @@ export async function handleBetCommand(req: VercelRequest, res: VercelResponse, 
     const { member, data, guild_id } = interaction;
     const adminId = member.user.id;
 
-    // 1. Check if user has Dono or botAP role
+    // 1. Check if user has permission to create bets
+    // Allow if: Administrator permission, or has Dono/botAP role
     const memberRoles = member.roles || [];
+    const memberPermissions = member.permissions || '0';
 
-    // We need to fetch guild roles to check names
-    // For now, check if resolved data has role info
+    // Check if user has ADMINISTRATOR permission (bitfield 0x8 = 8)
+    const ADMINISTRATOR_PERMISSION = BigInt(8);
+    const userPermissions = BigInt(memberPermissions);
+    const hasAdminPermission = (userPermissions & ADMINISTRATOR_PERMISSION) !== BigInt(0);
+
+    // Check for specific roles
     let hasAdminRole = false;
-
     if (interaction.data.resolved?.roles) {
         const roles = interaction.data.resolved.roles;
         hasAdminRole = memberRoles.some((roleId: string) => {
@@ -21,13 +26,11 @@ export async function handleBetCommand(req: VercelRequest, res: VercelResponse, 
         });
     }
 
-    // Alternative: Just check role IDs if we know them
-    // For testing, you might want to temporarily disable this check
-    if (!hasAdminRole) {
+    if (!hasAdminPermission && !hasAdminRole) {
         return res.status(200).json({
             type: InteractionResponseType.CHANNEL_MESSAGE_WITH_SOURCE,
             data: {
-                content: '❌ Apenas membros com cargo **Dono** ou **botAP** podem criar apostas.',
+                content: '❌ Apenas administradores ou membros com cargo **Dono**/**botAP** podem criar apostas.',
                 flags: 64
             }
         });
