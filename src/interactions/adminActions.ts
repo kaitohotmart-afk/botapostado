@@ -135,14 +135,14 @@ export async function handleSelectWinnerType(req: VercelRequest, res: VercelResp
                             {
                                 type: MessageComponentTypes.BUTTON,
                                 style: ButtonStyleTypes.PRIMARY,
-                                label: `Vencedor: <@${bet.criador_id}>`,
-                                custom_id: `select_winner:${betId}:${bet.criador_id}:${type}`,
+                                label: `Vencedor: <@${bet.jogador1_id}>`,
+                                custom_id: `select_winner:${betId}:${bet.jogador1_id}:${type}`,
                             },
                             {
                                 type: MessageComponentTypes.BUTTON,
                                 style: ButtonStyleTypes.PRIMARY,
-                                label: `Vencedor: <@${bet.oponente_id}>`,
-                                custom_id: `select_winner:${betId}:${bet.oponente_id}:${type}`,
+                                label: `Vencedor: <@${bet.jogador2_id}>`,
+                                custom_id: `select_winner:${betId}:${bet.jogador2_id}:${type}`,
                             }
                         ]
                     }
@@ -176,7 +176,7 @@ export async function handleSelectWinner(req: VercelRequest, res: VercelResponse
             });
         }
 
-        const loserId = winnerId === bet.criador_id ? bet.oponente_id : bet.criador_id;
+        const loserId = winnerId === bet.jogador1_id ? bet.jogador2_id : bet.jogador1_id;
         const totalBet = bet.valor * 2;
         let payout = 0;
         let fee = 0;

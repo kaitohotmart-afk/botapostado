@@ -198,7 +198,7 @@ export async function handleAcceptBet(req: VercelRequest, res: VercelResponse, i
                     },
                     {
                         title: '💳 INFORMAÇÕES DE PAGAMENTO',
-                        description: 'Para realizar os pagamentos das apostas, utilize um dos seguintes números:\n\n**e-Mola:** 877771719\n**M-Pesa:** 842482984\n**Titular:** Kaito Luis\n\nSomente após a confirmação do pagamento a aposta será validada e o chat será liberado.',
+                        description: 'Para realizar os pagamentos das apostas, utilize um dos seguintes números:\n\n**e-Mola:** `877771719`\n**M-Pesa:** `842482984`\n**Titular:** Kaito Luis\n\nSomente após a confirmação do pagamento a aposta será validada e o chat será liberado.',
                         color: 0x3498DB,
                     },
                     {
