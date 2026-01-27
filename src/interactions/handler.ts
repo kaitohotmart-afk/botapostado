@@ -6,9 +6,11 @@ import { handleAdminAction, handleSelectWinner, handleCloseChannel, handleSelect
 export async function handleComponent(req: VercelRequest, res: VercelResponse, interaction: any) {
     const { custom_id } = interaction.data;
 
-    if (custom_id.startsWith('accept_bet:')) {
-        const betId = custom_id.split(':')[1];
-        return handleAcceptBet(req, res, interaction, betId);
+    if (custom_id.startsWith('accept_bet_p1:') || custom_id.startsWith('accept_bet_p2:')) {
+        const parts = custom_id.split(':');
+        const betId = parts[1];
+        const playerNum = custom_id.startsWith('accept_bet_p1:') ? 'p1' : 'p2';
+        return handleAcceptBet(req, res, interaction, betId, playerNum);
     }
 
     if (custom_id.startsWith('confirm_payment:') || custom_id.startsWith('start_match:') || custom_id.startsWith('finish_bet:')) {

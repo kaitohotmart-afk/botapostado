@@ -6,7 +6,17 @@ dotenv.config();
 const commands = [
     new SlashCommandBuilder()
         .setName('apostar')
-        .setDescription('Cria uma nova aposta')
+        .setDescription('Cria uma nova aposta (Somente Admins)')
+        .addUserOption(option =>
+            option.setName('jogador1')
+                .setDescription('Primeiro jogador')
+                .setRequired(true)
+        )
+        .addUserOption(option =>
+            option.setName('jogador2')
+                .setDescription('Segundo jogador')
+                .setRequired(true)
+        )
         .addStringOption(option =>
             option.setName('modo')
                 .setDescription('Modo de jogo')
@@ -24,6 +34,15 @@ const commands = [
                 .setDescription('Valor da aposta (Mínimo 25 MZN)')
                 .setRequired(true)
                 .setMinValue(25)
+        )
+        .addStringOption(option =>
+            option.setName('modo_sala')
+                .setDescription('Tipo de sala permitido')
+                .setRequired(true)
+                .addChoices(
+                    { name: 'FULL MOBILE', value: 'full_mobile' },
+                    { name: 'MISTO (Mobile + Emulador)', value: 'misto' }
+                )
         ),
     new SlashCommandBuilder()
         .setName('ranking')

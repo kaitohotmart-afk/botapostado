@@ -11,6 +11,16 @@ export async function handleAdminAction(req: VercelRequest, res: VercelResponse,
 
     try {
         if (action === 'confirm_payment') {
+            // Fetch bet to get channel and players
+            const { data: bet, error: betError } = await supabase
+                .from('bets')
+                .select('*')
+                .eq('id', betId)
+                .single();
+
+            if (betError) throw betError;
+
+            // Update bet status
             const { error } = await supabase
                 .from('bets')
                 .update({ status: 'paga' })
@@ -18,9 +28,26 @@ export async function handleAdminAction(req: VercelRequest, res: VercelResponse,
 
             if (error) throw error;
 
+            // Unlock chat for both players
+            const channelId = bet.canal_pagamento_id;
+            if (channelId) {
+                const ALLOW_VIEW_SEND = '3072'; // VIEW_CHANNEL + SEND_MESSAGES
+
+                // Update permissions for both players
+                for (const playerId of [bet.jogador1_id, bet.jogador2_id]) {
+                    await rest.put(Routes.channelPermission(channelId, playerId), {
+                        body: {
+                            type: 1, // member
+                            allow: ALLOW_VIEW_SEND,
+                            deny: '0'
+                        }
+                    });
+                }
+            }
+
             return res.status(200).json({
                 type: InteractionResponseType.CHANNEL_MESSAGE_WITH_SOURCE,
-                data: { content: '✅ Pagamento confirmado! Aposta marcada como PAGA.' }
+                data: { content: '✅ Pagamento confirmado! Chat liberado para os jogadores. Aposta marcada como PAGA.' }
             });
         }
 
