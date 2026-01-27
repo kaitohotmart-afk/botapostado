@@ -2,7 +2,7 @@ import { VercelRequest, VercelResponse } from '@vercel/node';
 import { InteractionResponseType, MessageComponentTypes, ButtonStyleTypes } from 'discord-interactions';
 import { supabase } from '../utils/supabase.js';
 import { rest } from '../utils/discord.js';
-import { Routes, ChannelType, PermissionFlagsBits } from 'discord.js';
+import { Routes } from 'discord.js';
 
 export async function handleAcceptBet(req: VercelRequest, res: VercelResponse, interaction: any, betId: string) {
     const { member, guild_id } = interaction;
@@ -50,26 +50,34 @@ export async function handleAcceptBet(req: VercelRequest, res: VercelResponse, i
         }
 
         // 3. Create Private Channel
-        // Note: This requires the bot to have MANAGE_CHANNELS permission
-        const channelName = `aposta-${bet.criador_id}-vs-${discordId}`;
+        const channelName = `aposta-${betId.substring(0, 8)}`;
 
-        const channelData: any = {
+        // Permission flags as strings (Discord REST API format)
+        const DENY_VIEW = '1024'; // VIEW_CHANNEL
+        const ALLOW_VIEW_SEND = '3072'; // VIEW_CHANNEL (1024) + SEND_MESSAGES (2048)
+
+        const channelData = {
             name: channelName,
-            type: ChannelType.GuildText,
+            type: 0, // GUILD_TEXT
             permission_overwrites: [
                 {
                     id: guild_id, // @everyone
-                    deny: [PermissionFlagsBits.ViewChannel],
+                    type: 0, // role
+                    deny: DENY_VIEW,
+                    allow: '0',
                 },
                 {
                     id: bet.criador_id,
-                    allow: [PermissionFlagsBits.ViewChannel, PermissionFlagsBits.SendMessages],
+                    type: 1, // member
+                    deny: '0',
+                    allow: ALLOW_VIEW_SEND,
                 },
                 {
                     id: discordId,
-                    allow: [PermissionFlagsBits.ViewChannel, PermissionFlagsBits.SendMessages],
+                    type: 1, // member
+                    deny: '0',
+                    allow: ALLOW_VIEW_SEND,
                 },
-                // Add bot itself if needed, usually it has admin permissions
             ],
         };
 
@@ -96,7 +104,7 @@ export async function handleAcceptBet(req: VercelRequest, res: VercelResponse, i
                     {
                         title: '💳 INFORMAÇÕES DE PAGAMENTO',
                         description: 'Para realizar os pagamentos das apostas, utilize um dos seguintes números:\n\n**e-Mola:** 877771719\n**M-Pesa:** 842482984\n**Titular:** Kaito Luis\n\nSomente após a confirmação do pagamento a aposta será validada.',
-                        color: 0x00FF00, // Green
+                        color: 0x00FF00,
                         fields: [
                             { name: 'Valor da Aposta', value: `${bet.valor} MZN`, inline: true },
                             { name: 'Modo', value: bet.modo, inline: true }
@@ -105,7 +113,7 @@ export async function handleAcceptBet(req: VercelRequest, res: VercelResponse, i
                     {
                         title: '📝 COMO FUNCIONA',
                         description: '1. Ambos jogadores enviam o valor\n2. Aguarde confirmação do admin\n3. Após confirmado, criem a sala no Free Fire\n4. Joguem a partida\n5. Enviem o print do resultado\n6. O vencedor recebe o prêmio',
-                        color: 0x3498DB // Blue
+                        color: 0x3498DB
                     }
                 ],
                 components: [
@@ -144,7 +152,7 @@ export async function handleAcceptBet(req: VercelRequest, res: VercelResponse, i
             type: InteractionResponseType.UPDATE_MESSAGE,
             data: {
                 content: `Aposta aceita por <@${discordId}>! Canal criado: <#${channel.id}>`,
-                components: [] // Remove buttons
+                components: []
             }
         });
 
