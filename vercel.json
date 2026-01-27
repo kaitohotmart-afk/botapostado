@@ -1,14 +1,15 @@
 {
-    "functions": {
-        "api/index.ts": {
-            "memory": 1024,
-            "maxDuration": 10
-        }
-    },
-    "rewrites": [
+    "version": 2,
+    "builds": [
         {
-            "source": "/api/interactions",
-            "destination": "/api/index.ts"
+            "src": "api/index.ts",
+            "use": "@vercel/node"
+        }
+    ],
+    "routes": [
+        {
+            "src": "/api/interactions",
+            "dest": "api/index.ts"
         }
     ]
 }
