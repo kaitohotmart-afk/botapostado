@@ -247,9 +247,16 @@ export async function handleSelectWinner(req: VercelRequest, res: VercelResponse
         if (!bet) throw new Error('Bet not found');
 
         if (bet.status === 'finalizada') {
+            // If already finalized, check if it was the same winner (likely a retry)
+            if (bet.vencedor_id === winnerId) {
+                return res.status(200).json({
+                    type: InteractionResponseType.CHANNEL_MESSAGE_WITH_SOURCE,
+                    data: { content: '✅ Esta aposta já foi finalizada com este vencedor. (Provável repetição de clique)', flags: 64 }
+                });
+            }
             return res.status(200).json({
                 type: InteractionResponseType.CHANNEL_MESSAGE_WITH_SOURCE,
-                data: { content: '❌ Esta aposta já foi finalizada.', flags: 64 }
+                data: { content: '❌ Esta aposta já foi finalizada anteriormente.', flags: 64 }
             });
         }
 
@@ -261,19 +268,10 @@ export async function handleSelectWinner(req: VercelRequest, res: VercelResponse
 
         // 2. Calculate Fees and Payouts
         if (type === 'normal') {
-            // Fee Rules:
-            // <= 200 MT total: 10%
-            // >= 300 MT total: 5%
-
             const feePercentage = totalBet >= 300 ? 0.05 : 0.10;
             fee = totalBet * feePercentage;
             payout = totalBet - fee;
         } else {
-            // WO / Irregularity Rules:
-            // Winner gets: Own Bet + 70% of Loser's Bet
-            // Admin keeps: 30% of Loser's Bet
-            // Loser gets: 0 refund
-
             const winnerOwnBet = Number(bet.valor);
             const loserBet = Number(bet.valor);
             const winnerShareOfLoser = loserBet * 0.70;
@@ -297,16 +295,18 @@ export async function handleSelectWinner(req: VercelRequest, res: VercelResponse
 
         if (updateBetError) throw updateBetError;
 
-        // 4. Update Winner Stats & Level
-        // Winner: +1 win, +profit
+        // 4. Update Stats & Levels in parallel to save time
         const winnerProfit = payout - Number(bet.valor);
-        await incrementPlayerStats(winnerId, true, Number(bet.valor), winnerProfit);
-        await updatePlayerLevel(winnerId, interaction.guild_id);
 
-        // 5. Update Loser Stats & Level
-        // Loser: +1 loss, -bet amount
-        await incrementPlayerStats(loserId, false, Number(bet.valor), -Number(bet.valor));
-        await updatePlayerLevel(loserId, interaction.guild_id);
+        await Promise.all([
+            // Winner: +1 win, +profit
+            incrementPlayerStats(winnerId, true, Number(bet.valor), winnerProfit)
+                .then(() => updatePlayerLevel(winnerId, interaction.guild_id)),
+
+            // Loser: +1 loss, -bet amount
+            incrementPlayerStats(loserId, false, Number(bet.valor), -Number(bet.valor))
+                .then(() => updatePlayerLevel(loserId, interaction.guild_id))
+        ]);
 
         // 6. Restore "Criador de Apostas" role if applicable
         if (bet.criador_admin_id) {
@@ -324,12 +324,10 @@ export async function handleSelectWinner(req: VercelRequest, res: VercelResponse
         // 7. Get Winner Name (Display Name or Username)
         let winnerName = `<@${winnerId}>`; // Fallback
         try {
-            // Try to fetch guild member for nickname (displayName)
             const member = await rest.get(Routes.guildMember(interaction.guild_id, winnerId)) as any;
             winnerName = `**${member.nick || member.user.username}**`;
         } catch (e) {
             try {
-                // Fallback to user fetch if member fetch fails
                 const user = await rest.get(Routes.user(winnerId)) as any;
                 winnerName = `**${user.username}**`;
             } catch (e2) {
@@ -337,7 +335,7 @@ export async function handleSelectWinner(req: VercelRequest, res: VercelResponse
             }
         }
 
-        // 7. Send Log and Close Button
+        // 8. Send Log and Close Button
         const embedDescription = type === 'normal'
             ? `💰 **Valor Total:** ${totalBet} MT\n📉 **Taxa:** ${fee} MT\n💵 **Prêmio:** ${payout} MT`
             : `🚨 **Vitória por Irregularidade**\n💰 **Valor Total:** ${totalBet} MT\n📉 **Taxa (30% do perdedor):** ${fee} MT\n💵 **Prêmio (Aposta + 70% do perdedor):** ${payout} MT`;
@@ -380,7 +378,6 @@ export async function handleSelectWinner(req: VercelRequest, res: VercelResponse
 }
 
 export async function handleCloseChannel(req: VercelRequest, res: VercelResponse, interaction: any, channelId: string) {
-    // Also restrict closing channel? Usually yes.
     const isAdmin = await checkAdminPermission(interaction);
     if (!isAdmin) {
         return res.status(200).json({

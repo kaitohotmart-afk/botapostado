@@ -29,8 +29,9 @@ export async function handleBetCommand(req: VercelRequest, res: VercelResponse, 
     }
 
     const isCreator = await hasCreatorRole(guild_id, member);
+    const isAdmin = hasAdminPermission || hasAdminRole;
 
-    if (!hasAdminPermission && !hasAdminRole && !isCreator) {
+    if (!isAdmin && !isCreator) {
         return res.status(200).json({
             type: InteractionResponseType.CHANNEL_MESSAGE_WITH_SOURCE,
             data: {
@@ -41,7 +42,7 @@ export async function handleBetCommand(req: VercelRequest, res: VercelResponse, 
     }
 
     // 2. Anti-Spam Check: Limit of 2 active bets for non-admins
-    if (!hasAdminPermission && !hasAdminRole) {
+    if (!isAdmin) {
         const { count, error: countError } = await supabase
             .from('bets')
             .select('*', { count: 'exact', head: true })
@@ -106,26 +107,34 @@ export async function handleBetCommand(req: VercelRequest, res: VercelResponse, 
     }
 
     try {
-        // 3. Create bet (WITHOUT specific players)
+        // 3. Create bet
+        const insertData: any = {
+            criador_admin_id: adminId,
+            modo: modo,
+            valor: valor,
+            modo_sala: modoSala,
+            estilo_sala: estiloSala,
+            status: 'aguardando',
+            jogador1_aceitou: false,
+            jogador2_aceitou: false
+        };
+
+        // If it's a player creating (not admin), they are automatically jogador1
+        if (!isAdmin) {
+            insertData.jogador1_id = adminId;
+            insertData.jogador1_aceitou = true;
+        }
+
         const { data: bet, error: betError } = await supabase
             .from('bets')
-            .insert([{
-                criador_admin_id: adminId,
-                modo: modo,
-                valor: valor,
-                modo_sala: modoSala,
-                estilo_sala: estiloSala,
-                status: 'aguardando',
-                jogador1_aceitou: false,
-                jogador2_aceitou: false
-            }])
+            .insert([insertData])
             .select()
             .single();
 
         if (betError) throw betError;
 
         // 4. Check if we should remove the "Criador de Apostas" role
-        if (!hasAdminPermission && !hasAdminRole) {
+        if (!isAdmin) {
             const { count } = await supabase
                 .from('bets')
                 .select('*', { count: 'exact', head: true })
@@ -141,6 +150,10 @@ export async function handleBetCommand(req: VercelRequest, res: VercelResponse, 
         const modoSalaText = modoSala === 'full_mobile' ? '📱 FULL MOBILE' : '📱💻 MISTO';
         const modoNome = modo.replace('_', ' ').toUpperCase();
         const estiloSalaText = estiloSala === 'tatico' ? '🎯 TÁTICO' : '🎮 NORMAL';
+        const statusText = isAdmin ? '⏳ Aguardando Jogadores (0/2)' : '⏳ Aguardando adversário (1/2)';
+        const embedDescription = isAdmin
+            ? 'Qualquer jogador pode aceitar esta aposta.\n\n⚠️ **Os nomes dos jogadores serão revelados apenas após 2 jogadores aceitarem.**'
+            : `Aposta criada por <@${adminId}>. Aguardando um adversário para aceitar.\n\n⚠️ **Os nomes dos jogadores serão revelados apenas após o adversário aceitar.**`;
 
         return res.status(200).json({
             type: InteractionResponseType.CHANNEL_MESSAGE_WITH_SOURCE,
@@ -149,14 +162,14 @@ export async function handleBetCommand(req: VercelRequest, res: VercelResponse, 
                 embeds: [
                     {
                         title: '🔥 NOVA APOSTA DISPONÍVEL',
-                        description: 'Qualquer jogador pode aceitar esta aposta.\n\n⚠️ **Os nomes dos jogadores serão revelados apenas após 2 jogadores aceitarem.**',
+                        description: embedDescription,
                         color: 0xFF6B6B,
                         fields: [
                             { name: 'Modo', value: modoNome, inline: true },
                             { name: 'Valor', value: `${valor} MZN`, inline: true },
                             { name: 'Tipo de Sala', value: modoSalaText, inline: true },
                             { name: 'Estilo', value: estiloSalaText, inline: true },
-                            { name: 'Status', value: '⏳ Aguardando Jogadores (0/2)', inline: false },
+                            { name: 'Status', value: statusText, inline: false },
                         ],
                         footer: { text: `Bet ID: ${bet.id}` },
                         timestamp: new Date().toISOString()

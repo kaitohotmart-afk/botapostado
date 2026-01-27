@@ -117,21 +117,23 @@ export async function handleAcceptBet(req: VercelRequest, res: VercelResponse, i
             // Only one player accepted so far
             const modoSalaText = bet.modo_sala === 'full_mobile' ? '📱 FULL MOBILE' : '📱💻 MISTO';
             const modoNome = bet.modo.replace('_', ' ').toUpperCase();
+            const statusText = '⏳ Aguardando Jogadores (1/2)';
+            const embedDescription = `Aposta criada por <@${bet.criador_admin_id}>. Aguardando um adversário para aceitar.\n\n⚠️ **Os nomes dos jogadores serão revelados apenas após o adversário aceitar.**`;
 
             return res.status(200).json({
                 type: InteractionResponseType.UPDATE_MESSAGE,
                 data: {
-                    content: `Nova aposta criada por <@${bet.criador_admin_id}>!`,
+                    content: `🚨 **Nova aposta disponível!** @everyone\nTipo: **${modoNome}**\nValor: **${bet.valor}MT**`,
                     embeds: [
                         {
                             title: '🔥 NOVA APOSTA DISPONÍVEL',
-                            description: 'Qualquer jogador pode aceitar esta aposta.\n\n⚠️ **Os nomes dos jogadores serão revelados apenas após 2 jogadores aceitarem.**',
+                            description: embedDescription,
                             color: 0xFFAA00,
                             fields: [
                                 { name: 'Modo', value: modoNome, inline: true },
                                 { name: 'Valor', value: `${bet.valor} MZN`, inline: true },
                                 { name: 'Tipo de Sala', value: modoSalaText, inline: true },
-                                { name: 'Status', value: '⏳ Aguardando Jogadores (1/2)', inline: false },
+                                { name: 'Status', value: statusText, inline: false },
                             ],
                             footer: { text: `Bet ID: ${bet.id}` },
                             timestamp: new Date().toISOString()
