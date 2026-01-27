@@ -7,16 +7,6 @@ const commands = [
     new SlashCommandBuilder()
         .setName('apostar')
         .setDescription('Cria uma nova aposta (Somente Admins)')
-        .addUserOption(option =>
-            option.setName('jogador1')
-                .setDescription('Primeiro jogador')
-                .setRequired(true)
-        )
-        .addUserOption(option =>
-            option.setName('jogador2')
-                .setDescription('Segundo jogador')
-                .setRequired(true)
-        )
         .addStringOption(option =>
             option.setName('modo')
                 .setDescription('Modo de jogo')

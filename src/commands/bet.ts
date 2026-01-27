@@ -5,58 +5,48 @@ import { supabase } from '../utils/supabase.js';
 export async function handleBetCommand(req: VercelRequest, res: VercelResponse, interaction: any) {
     const { member, data, guild_id } = interaction;
     const adminId = member.user.id;
-    const adminUsername = member.user.username;
 
-    // 1. Check if user has DONO or botAP role
+    // 1. Check if user has Dono or botAP role
     const memberRoles = member.roles || [];
-    const hasAdminRole = memberRoles.some((roleId: string) => {
-        const role = interaction.data.resolved?.roles?.[roleId];
-        return role && (role.name === 'Dono' || role.name === 'botAP');
-    });
 
-    // Alternative: Check by fetching roles from guild (more reliable)
-    // For now, we'll check the member.roles array against guild roles
-    // Note: In HTTP Interactions, we need to check against resolved data
+    // We need to fetch guild roles to check names
+    // For now, check if resolved data has role info
+    let hasAdminRole = false;
 
+    if (interaction.data.resolved?.roles) {
+        const roles = interaction.data.resolved.roles;
+        hasAdminRole = memberRoles.some((roleId: string) => {
+            const role = roles[roleId];
+            return role && (role.name === 'Dono' || role.name === 'botAP');
+        });
+    }
+
+    // Alternative: Just check role IDs if we know them
+    // For testing, you might want to temporarily disable this check
     if (!hasAdminRole) {
         return res.status(200).json({
             type: InteractionResponseType.CHANNEL_MESSAGE_WITH_SOURCE,
             data: {
                 content: '❌ Apenas membros com cargo **Dono** ou **botAP** podem criar apostas.',
-                flags: 64 // Ephemeral
-            }
-        });
-    }
-
-    // 2. Extract command options
-    const player1Option = data.options.find((opt: any) => opt.name === 'jogador1');
-    const player2Option = data.options.find((opt: any) => opt.name === 'jogador2');
-    const modoOption = data.options.find((opt: any) => opt.name === 'modo');
-    const valorOption = data.options.find((opt: any) => opt.name === 'valor');
-    const modoSalaOption = data.options.find((opt: any) => opt.name === 'modo_sala');
-
-    const player1Id = player1Option?.value;
-    const player2Id = player2Option?.value;
-    const modo = modoOption?.value;
-    const valor = valorOption?.value;
-    const modoSala = modoSalaOption?.value;
-
-    // 3. Validation
-    if (!player1Id || !player2Id || !modo || !valor || !modoSala) {
-        return res.status(200).json({
-            type: InteractionResponseType.CHANNEL_MESSAGE_WITH_SOURCE,
-            data: {
-                content: '❌ Todos os campos são obrigatórios.',
                 flags: 64
             }
         });
     }
 
-    if (player1Id === player2Id) {
+    // 2. Extract command options
+    const modoOption = data.options.find((opt: any) => opt.name === 'modo');
+    const valorOption = data.options.find((opt: any) => opt.name === 'valor');
+    const modoSalaOption = data.options.find((opt: any) => opt.name === 'modo_sala');
+
+    const modo = modoOption?.value;
+    const valor = valorOption?.value;
+    const modoSala = modoSalaOption?.value;
+
+    if (!modo || !valor || !modoSala) {
         return res.status(200).json({
             type: InteractionResponseType.CHANNEL_MESSAGE_WITH_SOURCE,
             data: {
-                content: '❌ Os dois jogadores não podem ser a mesma pessoa.',
+                content: '❌ Todos os campos são obrigatórios.',
                 flags: 64
             }
         });
@@ -73,30 +63,11 @@ export async function handleBetCommand(req: VercelRequest, res: VercelResponse, 
     }
 
     try {
-        // 4. Ensure both players exist in players table
-        for (const playerId of [player1Id, player2Id]) {
-            const playerData = data.resolved.users[playerId];
-            const { error: playerError } = await supabase
-                .from('players')
-                .select('*')
-                .eq('discord_id', playerId)
-                .single();
-
-            if (playerError && playerError.code === 'PGRST116') {
-                await supabase.from('players').insert([{
-                    discord_id: playerId,
-                    nome: playerData?.username || 'Unknown'
-                }]);
-            }
-        }
-
-        // 5. Create bet
+        // 3. Create bet (WITHOUT specific players)
         const { data: bet, error: betError } = await supabase
             .from('bets')
             .insert([{
                 criador_admin_id: adminId,
-                jogador1_id: player1Id,
-                jogador2_id: player2Id,
                 modo: modo,
                 valor: valor,
                 modo_sala: modoSala,
@@ -109,7 +80,7 @@ export async function handleBetCommand(req: VercelRequest, res: VercelResponse, 
 
         if (betError) throw betError;
 
-        // 6. Send message with acceptance buttons (ANONYMOUS)
+        // 4. Send public message with ONE accept button
         const modoSalaText = modoSala === 'full_mobile' ? '📱 FULL MOBILE' : '📱💻 MISTO';
         const modoNome = modo.replace('_', ' ').toUpperCase();
 
@@ -120,13 +91,13 @@ export async function handleBetCommand(req: VercelRequest, res: VercelResponse, 
                 embeds: [
                     {
                         title: '🔥 NOVA APOSTA DISPONÍVEL',
-                        description: 'Dois jogadores foram convocados para esta partida.\n\n⚠️ **Os nomes dos adversários serão revelados apenas após ambos aceitarem.**',
+                        description: 'Qualquer jogador pode aceitar esta aposta.\n\n⚠️ **Os nomes dos jogadores serão revelados apenas após 2 jogadores aceitarem.**',
                         color: 0xFF6B6B,
                         fields: [
                             { name: 'Modo', value: modoNome, inline: true },
                             { name: 'Valor', value: `${valor} MZN`, inline: true },
                             { name: 'Tipo de Sala', value: modoSalaText, inline: true },
-                            { name: 'Status', value: '⏳ Aguardando Aceitação (0/2)', inline: false },
+                            { name: 'Status', value: '⏳ Aguardando Jogadores (0/2)', inline: false },
                         ],
                         footer: { text: `Bet ID: ${bet.id}` },
                         timestamp: new Date().toISOString()
@@ -139,15 +110,8 @@ export async function handleBetCommand(req: VercelRequest, res: VercelResponse, 
                             {
                                 type: MessageComponentTypes.BUTTON,
                                 style: ButtonStyleTypes.SUCCESS,
-                                label: 'Jogador 1: Aceitar',
-                                custom_id: `accept_bet_p1:${bet.id}`,
-                                emoji: { name: '✅' }
-                            },
-                            {
-                                type: MessageComponentTypes.BUTTON,
-                                style: ButtonStyleTypes.SUCCESS,
-                                label: 'Jogador 2: Aceitar',
-                                custom_id: `accept_bet_p2:${bet.id}`,
+                                label: 'Aceitar Aposta',
+                                custom_id: `accept_bet:${bet.id}`,
                                 emoji: { name: '✅' }
                             }
                         ]

@@ -4,7 +4,7 @@ import { supabase } from '../utils/supabase.js';
 import { rest } from '../utils/discord.js';
 import { Routes } from 'discord.js';
 
-export async function handleAcceptBet(req: VercelRequest, res: VercelResponse, interaction: any, betId: string, playerNum: string) {
+export async function handleAcceptBet(req: VercelRequest, res: VercelResponse, interaction: any, betId: string) {
     const { member, guild_id } = interaction;
     const discordId = member.user.id;
     const username = member.user.username;
@@ -31,27 +31,15 @@ export async function handleAcceptBet(req: VercelRequest, res: VercelResponse, i
             });
         }
 
-        // 2. Check which player this person should be
-        const isPlayer1 = playerNum === 'p1';
-        const expectedPlayerId = isPlayer1 ? bet.jogador1_id : bet.jogador2_id;
-
-        if (expectedPlayerId !== discordId) {
-            return res.status(200).json({
-                type: InteractionResponseType.CHANNEL_MESSAGE_WITH_SOURCE,
-                data: { content: '❌ Este botão não é para você.', flags: 64 }
-            });
-        }
-
-        // 3. Check if already accepted
-        const alreadyAccepted = isPlayer1 ? bet.jogador1_aceitou : bet.jogador2_aceitou;
-        if (alreadyAccepted) {
+        // 2. Check if player already accepted
+        if (bet.jogador1_id === discordId || bet.jogador2_id === discordId) {
             return res.status(200).json({
                 type: InteractionResponseType.CHANNEL_MESSAGE_WITH_SOURCE,
                 data: { content: '✅ Você já aceitou esta aposta.', flags: 64 }
             });
         }
 
-        // 4. Ensure player exists
+        // 3. Ensure player exists in database
         let { error: playerError } = await supabase
             .from('players')
             .select('*')
@@ -62,20 +50,38 @@ export async function handleAcceptBet(req: VercelRequest, res: VercelResponse, i
             await supabase.from('players').insert([{ discord_id: discordId, nome: username }]);
         }
 
-        // 5. Update acceptance
-        const updateField = isPlayer1 ? 'jogador1_aceitou' : 'jogador2_aceitou';
+        // 4. Assign player to first available slot
+        let updateData: any = {};
+        let playerSlot = '';
+
+        if (!bet.jogador1_id) {
+            updateData.jogador1_id = discordId;
+            updateData.jogador1_aceitou = true;
+            playerSlot = '1';
+        } else if (!bet.jogador2_id) {
+            updateData.jogador2_id = discordId;
+            updateData.jogador2_aceitou = true;
+            playerSlot = '2';
+        } else {
+            return res.status(200).json({
+                type: InteractionResponseType.CHANNEL_MESSAGE_WITH_SOURCE,
+                data: { content: '❌ Esta aposta já está completa.', flags: 64 }
+            });
+        }
+
+        // 5. Update bet
         const { error: updateError } = await supabase
             .from('bets')
-            .update({ [updateField]: true })
+            .update(updateData)
             .eq('id', betId);
 
         if (updateError) throw updateError;
 
-        // 6. Check if both accepted
-        const bothAccepted = isPlayer1 ? bet.jogador2_aceitou : bet.jogador1_aceitou;
+        // 6. Check if both slots are filled
+        const bothAccepted = (bet.jogador1_id || playerSlot === '1') && (bet.jogador2_id || playerSlot === '2');
 
         if (!bothAccepted) {
-            // Only one accepted so far
+            // Only one player accepted so far
             const modoSalaText = bet.modo_sala === 'full_mobile' ? '📱 FULL MOBILE' : '📱💻 MISTO';
             const modoNome = bet.modo.replace('_', ' ').toUpperCase();
 
@@ -86,13 +92,13 @@ export async function handleAcceptBet(req: VercelRequest, res: VercelResponse, i
                     embeds: [
                         {
                             title: '🔥 NOVA APOSTA DISPONÍVEL',
-                            description: 'Dois jogadores foram convocados para esta partida.\n\n⚠️ **Os nomes dos adversários serão revelados apenas após ambos aceitarem.**',
+                            description: 'Qualquer jogador pode aceitar esta aposta.\n\n⚠️ **Os nomes dos jogadores serão revelados apenas após 2 jogadores aceitarem.**',
                             color: 0xFFAA00,
                             fields: [
                                 { name: 'Modo', value: modoNome, inline: true },
                                 { name: 'Valor', value: `${bet.valor} MZN`, inline: true },
                                 { name: 'Tipo de Sala', value: modoSalaText, inline: true },
-                                { name: 'Status', value: '⏳ Aguardando Aceitação (1/2)', inline: false },
+                                { name: 'Status', value: '⏳ Aguardando Jogadores (1/2)', inline: false },
                             ],
                             footer: { text: `Bet ID: ${bet.id}` },
                             timestamp: new Date().toISOString()
@@ -105,18 +111,9 @@ export async function handleAcceptBet(req: VercelRequest, res: VercelResponse, i
                                 {
                                     type: MessageComponentTypes.BUTTON,
                                     style: ButtonStyleTypes.SUCCESS,
-                                    label: 'Jogador 1: Aceitar',
-                                    custom_id: `accept_bet_p1:${bet.id}`,
-                                    emoji: { name: '✅' },
-                                    disabled: bet.jogador1_aceitou || isPlayer1
-                                },
-                                {
-                                    type: MessageComponentTypes.BUTTON,
-                                    style: ButtonStyleTypes.SUCCESS,
-                                    label: 'Jogador 2: Aceitar',
-                                    custom_id: `accept_bet_p2:${bet.id}`,
-                                    emoji: { name: '✅' },
-                                    disabled: bet.jogador2_aceitou || !isPlayer1
+                                    label: 'Aceitar Aposta',
+                                    custom_id: `accept_bet:${bet.id}`,
+                                    emoji: { name: '✅' }
                                 }
                             ]
                         }
@@ -126,48 +123,48 @@ export async function handleAcceptBet(req: VercelRequest, res: VercelResponse, i
         }
 
         // 7. BOTH ACCEPTED - Create private channel
+        const player1Id = bet.jogador1_id || discordId;
+        const player2Id = playerSlot === '2' ? discordId : bet.jogador2_id;
+
         const channelName = `aposta-${betId.substring(0, 8)}`;
 
         // Permission bitflags as strings
-        const DENY_VIEW = '1024'; // VIEW_CHANNEL
-        const ALLOW_VIEW_ONLY = '1024'; // VIEW_CHANNEL
-        const DENY_SEND = '2048'; // SEND_MESSAGES
-        const ALLOW_VIEW_SEND = '3072'; // VIEW_CHANNEL (1024) + SEND_MESSAGES (2048)
+        const DENY_VIEW = '1024';
+        const ALLOW_VIEW_ONLY = '1024';
+        const DENY_SEND = '2048';
+        const ALLOW_VIEW_SEND = '3072';
 
-        // Get admin role IDs (we need to fetch from guild or use resolved data)
-        // For now, we'll add permissions for the bot and individual admin
         const channelData = {
             name: channelName,
-            type: 0, // GUILD_TEXT
+            type: 0,
             permission_overwrites: [
                 {
-                    id: guild_id, // @everyone
-                    type: 0, // role
+                    id: guild_id,
+                    type: 0,
                     deny: DENY_VIEW,
                     allow: '0',
                 },
                 {
-                    id: bet.jogador1_id,
-                    type: 1, // member
-                    deny: DENY_SEND, // Can view but NOT send
+                    id: player1Id,
+                    type: 1,
+                    deny: DENY_SEND,
                     allow: ALLOW_VIEW_ONLY,
                 },
                 {
-                    id: bet.jogador2_id,
-                    type: 1, // member
-                    deny: DENY_SEND, // Can view but NOT send
+                    id: player2Id,
+                    type: 1,
+                    deny: DENY_SEND,
                     allow: ALLOW_VIEW_ONLY,
                 },
                 {
                     id: bet.criador_admin_id,
-                    type: 1, // member (admin who created)
+                    type: 1,
                     deny: '0',
                     allow: ALLOW_VIEW_SEND,
                 },
             ],
         };
 
-        // Create channel via REST
         const channel: any = await rest.post(Routes.guildChannels(guild_id), { body: channelData });
 
         // 8. Update Bet status
@@ -181,17 +178,17 @@ export async function handleAcceptBet(req: VercelRequest, res: VercelResponse, i
 
         if (finalUpdateError) throw finalUpdateError;
 
-        // 9. Send Payment Info and Instructions to channel
+        // 9. Send info to channel
         const modoSalaText = bet.modo_sala === 'full_mobile' ? '📱 FULL MOBILE' : '📱💻 MISTO (Mobile + Emulador)';
         const modoNome = bet.modo.replace('_', ' ').toUpperCase();
 
         await rest.post(Routes.channelMessages(channel.id), {
             body: {
-                content: `<@${bet.jogador1_id}> <@${bet.jogador2_id}>`,
+                content: `<@${player1Id}> <@${player2Id}>`,
                 embeds: [
                     {
                         title: '⚔️ PARTIDA ACEITA',
-                        description: `**Jogador 1:** <@${bet.jogador1_id}>\n**Jogador 2:** <@${bet.jogador2_id}>\n\n🔒 **O chat está bloqueado até que o admin confirme o pagamento.**`,
+                        description: `**Jogador 1:** <@${player1Id}>\n**Jogador 2:** <@${player2Id}>\n\n🔒 **O chat está bloqueado até que o admin confirme o pagamento.**`,
                         color: 0x00FF00,
                         fields: [
                             { name: 'Modo', value: modoNome, inline: true },
@@ -245,7 +242,7 @@ export async function handleAcceptBet(req: VercelRequest, res: VercelResponse, i
         return res.status(200).json({
             type: InteractionResponseType.UPDATE_MESSAGE,
             data: {
-                content: `✅ **Aposta aceita por ambos os jogadores!**\n\nCanal da partida: <#${channel.id}>`,
+                content: `✅ **Aposta aceita por 2 jogadores!**\n\nCanal da partida: <#${channel.id}>`,
                 embeds: [],
                 components: []
             }
