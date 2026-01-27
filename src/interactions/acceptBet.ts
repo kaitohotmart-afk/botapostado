@@ -114,6 +114,13 @@ export async function handleAcceptBet(req: VercelRequest, res: VercelResponse, i
                                     label: 'Aceitar Aposta',
                                     custom_id: `accept_bet:${bet.id}`,
                                     emoji: { name: '✅' }
+                                },
+                                {
+                                    type: MessageComponentTypes.BUTTON,
+                                    style: ButtonStyleTypes.DANGER,
+                                    label: 'Cancelar',
+                                    custom_id: `cancel_bet:${bet.id}`,
+                                    emoji: { name: '✖️' }
                                 }
                             ]
                         }
