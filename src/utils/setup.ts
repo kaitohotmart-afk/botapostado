@@ -15,10 +15,14 @@ export async function setupGuildChannels(guildId: string) {
         // 1. Get existing channels
         const existingChannels = await rest.get(Routes.guildChannels(guildId)) as any[];
 
-        // 2. Find or create category
-        let category = existingChannels.find(c => c.name === CATEGORY_NAME && c.type === ChannelType.GuildCategory);
+        // 2. Find or create category (Case Insensitive)
+        let category = existingChannels.find(c =>
+            c.name.toLowerCase() === CATEGORY_NAME.toLowerCase() &&
+            c.type === ChannelType.GuildCategory
+        );
 
         if (!category) {
+            console.log(`Creating category: ${CATEGORY_NAME}`);
             category = await rest.post(Routes.guildChannels(guildId), {
                 body: {
                     name: CATEGORY_NAME,
@@ -27,11 +31,24 @@ export async function setupGuildChannels(guildId: string) {
             });
         }
 
-        // 3. Create channels if they don't exist
+        // 3. Create or Update channels
         for (const channelDef of CHANNELS) {
-            let channel = existingChannels.find(c => c.name === channelDef.name && c.parent_id === category.id);
+            // Find channel globally (Case Insensitive)
+            let channel = existingChannels.find(c => c.name.toLowerCase() === channelDef.name.toLowerCase());
 
-            if (!channel) {
+            if (channel) {
+                // Channel exists, check if it's in the correct category
+                if (channel.parent_id !== category.id) {
+                    console.log(`Moving channel ${channelDef.name} to correct category...`);
+                    await rest.patch(Routes.channel(channel.id), {
+                        body: { parent_id: category.id }
+                    });
+                }
+                // We could update permissions here if needed, but for now let's assume they are correct if the channel exists
+                // to avoid overwriting custom changes the user might have made.
+            } else {
+                // Channel does not exist, create it
+                console.log(`Creating channel: ${channelDef.name}`);
                 const channelData: any = {
                     name: channelDef.name,
                     type: channelDef.type,
@@ -124,6 +141,16 @@ export async function updateInstructions(channelId: string) {
     };
 
     try {
+        // Clear existing messages to avoid duplicates
+        const messages = await rest.get(Routes.channelMessages(channelId)) as any[];
+        if (messages.length > 0) {
+            // Bulk delete if possible, or manual delete
+            // For simplicity in this context, let's just delete the last few messages found
+            for (const msg of messages) {
+                await rest.delete(Routes.channelMessage(channelId, msg.id));
+            }
+        }
+
         await rest.post(Routes.channelMessages(channelId), {
             body: { embeds: [embed] }
         });
