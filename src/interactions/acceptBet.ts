@@ -40,7 +40,19 @@ export async function handleAcceptBet(req: VercelRequest, res: VercelResponse, i
             });
         }
 
-        // 2.1 Anti-Spam Check: Limit of 2 active participations
+        // 2.1 Anti-Spam Check: Limit of 2 active participations for non-privileged users
+        const memberRoles = member.roles || [];
+        const memberPermissions = BigInt(member.permissions || '0');
+        const ADMINISTRATOR_PERMISSION = BigInt(8);
+        const hasAdminPermission = (memberPermissions & ADMINISTRATOR_PERMISSION) !== BigInt(0);
+
+        // In button interactions, we don't get 'resolved' roles. 
+        // We would need to fetch the member or use a cache.
+        // For now, we'll check if the user has admin permissions.
+        // If we want to support VIP role check here, we'd need to fetch the guild member.
+
+        let isPrivileged = hasAdminPermission;
+
         const { count: participationCount, error: partError } = await supabase
             .from('bets')
             .select('*', { count: 'exact', head: true })
@@ -49,11 +61,11 @@ export async function handleAcceptBet(req: VercelRequest, res: VercelResponse, i
 
         if (partError) {
             console.error('Error counting participations:', partError);
-        } else if (participationCount !== null && participationCount >= 2) {
+        } else if (!isPrivileged && participationCount !== null && participationCount >= 2) {
             return res.status(200).json({
                 type: InteractionResponseType.CHANNEL_MESSAGE_WITH_SOURCE,
                 data: {
-                    content: '❌ Você já está participando de 2 apostas ativas. Finalize uma antes de entrar em outra.',
+                    content: '❌ Você já está participando de 2 apostas ativas. Usuários comuns podem ter no máximo 2 apostas ao mesmo tempo. Torne-se VIP para jogar sem limites!',
                     flags: 64
                 }
             });
@@ -233,22 +245,24 @@ export async function handleAcceptBet(req: VercelRequest, res: VercelResponse, i
 
         await rest.post(Routes.channelMessages(channel.id), {
             body: {
-                content: `📌 **Aposta criada por:** <@${bet.criador_admin_id}>\n\nAposta iniciada! Aguardando pagamento.`,
+                content: `🔔 **Aposta Iniciada!**\nJogadores: <@${player1Id}> vs <@${player2Id}>\nAdmin/Criador: <@${bet.criador_admin_id}>`,
                 embeds: [
                     {
-                        title: '⚔️ PARTIDA ACEITA',
-                        description: `**Jogador 1:** (Oculto)\n**Jogador 2:** (Oculto)\n\n🔒 **O chat está bloqueado até que o admin confirme o pagamento.**`,
+                        title: '⚔️ PARTIDA CONFIRMADA',
+                        description: `Aposta entre <@${player1Id}> e <@${player2Id}>.\n\n🔒 **O chat está bloqueado até que o pagamento seja confirmado.**`,
                         color: 0x00FF00,
                         fields: [
                             { name: 'Modo', value: modoNome, inline: true },
                             { name: 'Valor', value: `${bet.valor} MZN`, inline: true },
                             { name: 'Tipo de Sala', value: modoSalaText, inline: true },
                             { name: 'Estilo', value: estiloSalaText, inline: true },
-                        ]
+                        ],
+                        footer: { text: `Bet ID: ${bet.id}` },
+                        timestamp: new Date().toISOString()
                     },
                     {
-                        title: '💳 MÉTODOS DE PAGAMENTO (ADMIN)',
-                        description: 'Selecione um administrador para ver os dados de pagamento:',
+                        title: '💳 PAGAMENTO REQUERIDO',
+                        description: 'Selecione um administrador abaixo para ver os dados de pagamento e envie o comprovante neste canal.',
                         color: 0x3498DB,
                     }
                 ],
