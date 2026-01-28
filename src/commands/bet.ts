@@ -49,7 +49,7 @@ export async function handleBetCommand(req: VercelRequest, res: VercelResponse, 
         const { count, error: countError } = await supabase
             .from('bets')
             .select('*', { count: 'exact', head: true })
-            .or(`criador_admin_id.eq.${adminId},jogador1_id.eq.${adminId},jogador2_id.eq.${adminId}`)
+            .eq('criador_admin_id', adminId)
             .in('status', ['aguardando', 'aceita']);
 
         if (countError) {
@@ -154,7 +154,7 @@ export async function handleBetCommand(req: VercelRequest, res: VercelResponse, 
             const { count } = await supabase
                 .from('bets')
                 .select('*', { count: 'exact', head: true })
-                .or(`criador_admin_id.eq.${adminId},jogador1_id.eq.${adminId},jogador2_id.eq.${adminId}`)
+                .eq('criador_admin_id', adminId)
                 .in('status', ['aguardando', 'aceita']);
 
             if (count !== null && count >= 2) {
