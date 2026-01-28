@@ -22,35 +22,34 @@ export async function handleBetCommand(req: VercelRequest, res: VercelResponse, 
     const userPermissions = BigInt(memberPermissions);
     const hasAdminPermission = (userPermissions & ADMINISTRATOR_PERMISSION) !== BigInt(0);
 
-    let hasSpecialRole = false;
+    let hasStaffRole = false;
+    let hasVipRole = false;
+
     if (interaction.data.resolved?.roles) {
         const roles = interaction.data.resolved.roles;
-        hasSpecialRole = memberRoles.some((roleId: string) => {
+        memberRoles.forEach((roleId: string) => {
             const role = roles[roleId];
-            if (!role) return false;
+            if (!role) return;
             const roleName = role.name.toLowerCase();
-            return roleName === 'dono' || roleName === 'botap' || roleName === 'vip' || roleName === 'diamante' || roleName === 'staff' || roleName === 'admin';
+            if (roleName === 'dono' || roleName === 'botap' || roleName === 'staff' || roleName === 'admin') {
+                hasStaffRole = true;
+            }
+            if (roleName === 'vip' || roleName === 'diamante') {
+                hasVipRole = true;
+            }
         });
-    } else {
-        // Fallback: check if we have role IDs but no resolved data (common in some interaction types)
-        // For slash commands, resolved roles are usually present if the user has roles.
-        // But we can also check for common role names if we had a way to fetch them.
-        // For now, we rely on the resolved data or admin permissions.
     }
 
-    const isPrivileged = hasAdminPermission || hasSpecialRole;
-
-    // 1.1 Configure Channel Permissions (Ensure only slash commands are allowed)
-    // ... (rest of the logic remains similar but uses isPrivileged)
+    const isStaff = hasAdminPermission || hasStaffRole;
+    const isPrivileged = isStaff || hasVipRole;
 
     // 2. Anti-Spam Check: Limit of 2 active bets for non-privileged users
     if (!isPrivileged) {
-        // Active statuses: aguardando, aceita, paga, em_jogo
-        // Inactive statuses: finalizada, cancelada, expirada, wo
+        // Check both as creator and as player
         const { count, error: countError } = await supabase
             .from('bets')
             .select('*', { count: 'exact', head: true })
-            .eq('criador_admin_id', adminId)
+            .or(`criador_admin_id.eq.${adminId},jogador1_id.eq.${adminId},jogador2_id.eq.${adminId}`)
             .in('status', ['aguardando', 'aceita', 'paga', 'em_jogo']);
 
         if (countError) {
@@ -59,7 +58,7 @@ export async function handleBetCommand(req: VercelRequest, res: VercelResponse, 
             return res.status(200).json({
                 type: InteractionResponseType.CHANNEL_MESSAGE_WITH_SOURCE,
                 data: {
-                    content: '❌ Você já tem 2 apostas pendentes. Usuários comuns podem ter no máximo 2 apostas ativas. Torne-se VIP para criar sem limites!',
+                    content: '❌ Você já tem 2 apostas ativas. Usuários comuns podem ter no máximo 2 apostas ao mesmo tempo. Torne-se VIP para criar sem limites!',
                     flags: 64
                 }
             });
@@ -123,8 +122,8 @@ export async function handleBetCommand(req: VercelRequest, res: VercelResponse, 
             jogador2_aceitou: false
         };
 
-        // If it's a player creating (not admin), they are automatically jogador1
-        if (!isPrivileged) {
+        // If it's NOT staff creating, they are automatically jogador1
+        if (!isStaff) {
             insertData.jogador1_id = adminId;
             insertData.jogador1_aceitou = true;
         }
@@ -142,7 +141,7 @@ export async function handleBetCommand(req: VercelRequest, res: VercelResponse, 
             const { count } = await supabase
                 .from('bets')
                 .select('*', { count: 'exact', head: true })
-                .eq('criador_admin_id', adminId)
+                .or(`criador_admin_id.eq.${adminId},jogador1_id.eq.${adminId},jogador2_id.eq.${adminId}`)
                 .in('status', ['aguardando', 'aceita', 'paga', 'em_jogo']);
 
             if (count !== null && count >= 2) {
@@ -154,8 +153,8 @@ export async function handleBetCommand(req: VercelRequest, res: VercelResponse, 
         const modoSalaText = modoSala === 'full_mobile' ? '📱 FULL MOBILE' : '📱💻 MISTO';
         const modoNome = modo.replace('_', ' ').toUpperCase();
         const estiloSalaText = estiloSala === 'tatico' ? '🎯 TÁTICO' : '🎮 NORMAL';
-        const statusText = isPrivileged ? '⏳ Aguardando Jogadores (0/2)' : '⏳ Aguardando adversário (1/2)';
-        const embedDescription = isPrivileged
+        const statusText = isStaff ? '⏳ Aguardando Jogadores (0/2)' : '⏳ Aguardando adversário (1/2)';
+        const embedDescription = isStaff
             ? 'Qualquer jogador pode aceitar esta aposta.\n\n⚠️ **Os nomes dos jogadores serão revelados apenas após 2 jogadores aceitarem.**'
             : `Aposta criada por <@${adminId}>. Aguardando um adversário para aceitar.\n\n⚠️ **Os nomes dos jogadores serão revelados apenas após o adversário aceitar.**`;
 

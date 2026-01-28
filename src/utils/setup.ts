@@ -45,7 +45,7 @@ export async function setupGuildChannels(guildId: string) {
                             id: guildId, // @everyone
                             type: 0,
                             deny: PermissionFlagsBits.SendMessages.toString(),
-                            allow: PermissionFlagsBits.UseApplicationCommands.toString()
+                            allow: (PermissionFlagsBits.UseApplicationCommands | PermissionFlagsBits.ViewChannel).toString()
                         }
                     ];
                 } else {

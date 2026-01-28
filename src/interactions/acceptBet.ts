@@ -41,22 +41,19 @@ export async function handleAcceptBet(req: VercelRequest, res: VercelResponse, i
         }
 
         // 2.1 Anti-Spam Check: Limit of 2 active participations for non-privileged users
-        const memberRoles = member.roles || [];
         const memberPermissions = BigInt(member.permissions || '0');
         const ADMINISTRATOR_PERMISSION = BigInt(8);
         const hasAdminPermission = (memberPermissions & ADMINISTRATOR_PERMISSION) !== BigInt(0);
 
-        // In button interactions, we don't get 'resolved' roles. 
-        // We would need to fetch the member or use a cache.
-        // For now, we'll check if the user has admin permissions.
-        // If we want to support VIP role check here, we'd need to fetch the guild member.
-
+        // In button interactions, we don't get 'resolved' roles.
+        // We check admin permission first. For VIPs, we would ideally fetch the member,
+        // but for now we'll rely on the participation count check which is the main constraint.
         let isPrivileged = hasAdminPermission;
 
         const { count: participationCount, error: partError } = await supabase
             .from('bets')
             .select('*', { count: 'exact', head: true })
-            .or(`jogador1_id.eq.${discordId},jogador2_id.eq.${discordId}`)
+            .or(`criador_admin_id.eq.${discordId},jogador1_id.eq.${discordId},jogador2_id.eq.${discordId}`)
             .in('status', ['aguardando', 'aceita', 'paga', 'em_jogo']);
 
         if (partError) {

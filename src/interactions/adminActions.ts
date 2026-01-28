@@ -313,7 +313,7 @@ export async function handleSelectWinner(req: VercelRequest, res: VercelResponse
             const { count } = await supabase
                 .from('bets')
                 .select('*', { count: 'exact', head: true })
-                .eq('criador_admin_id', bet.criador_admin_id)
+                .or(`criador_admin_id.eq.${bet.criador_admin_id},jogador1_id.eq.${bet.criador_admin_id},jogador2_id.eq.${bet.criador_admin_id}`)
                 .in('status', ['aguardando', 'aceita', 'paga', 'em_jogo']);
 
             if (count !== null && count < 2) {

@@ -6,7 +6,8 @@ dotenv.config();
 const commands = [
     new SlashCommandBuilder()
         .setName('apostar')
-        .setDescription('Cria uma nova aposta (Somente Admins)')
+        .setDescription('Cria uma nova aposta')
+        .setDefaultMemberPermissions(null)
         .addStringOption(option =>
             option.setName('modo')
                 .setDescription('Modo de jogo')
@@ -45,10 +46,12 @@ const commands = [
         ),
     new SlashCommandBuilder()
         .setName('ranking')
-        .setDescription('Mostra o ranking dos melhores jogadores'),
+        .setDescription('Mostra o ranking dos melhores jogadores')
+        .setDefaultMemberPermissions(null),
     new SlashCommandBuilder()
         .setName('perfil')
         .setDescription('Mostra suas estatísticas ou de outro jogador')
+        .setDefaultMemberPermissions(null)
         .addUserOption(option =>
             option.setName('usuario')
                 .setDescription('Usuário para ver o perfil')
