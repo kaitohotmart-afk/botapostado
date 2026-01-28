@@ -40,31 +40,8 @@ export async function handleAcceptBet(req: VercelRequest, res: VercelResponse, i
             });
         }
 
-        // 2.1 Anti-Spam Check: Limit of 5 active participations for non-privileged users
-        const memberPermissions = BigInt(member.permissions || '0');
-        const ADMINISTRATOR_PERMISSION = BigInt(8);
-        const hasAdminPermission = (memberPermissions & ADMINISTRATOR_PERMISSION) !== BigInt(0);
-
-        let isPrivileged = hasAdminPermission;
-
-        // Count bets where user is a participant and status is 'aceita', 'paga', or 'em_jogo'
-        const { count: participationCount, error: partError } = await supabase
-            .from('bets')
-            .select('*', { count: 'exact', head: true })
-            .or(`jogador1_id.eq.${discordId},jogador2_id.eq.${discordId}`)
-            .in('status', ['aceita', 'paga', 'em_jogo']);
-
-        if (partError) {
-            console.error('Error counting participations:', partError);
-        } else if (!isPrivileged && participationCount !== null && participationCount >= 5) {
-            return res.status(200).json({
-                type: InteractionResponseType.CHANNEL_MESSAGE_WITH_SOURCE,
-                data: {
-                    content: '❌ Você já está participando de 5 apostas ativas. Você precisa finalizar algumas para aceitar novas. Torne-se VIP para jogar sem limites!',
-                    flags: 64
-                }
-            });
-        }
+        // 2.1 Anti-Spam Check: REMOVED as per user request
+        // Users can now join unlimited bets.
 
         // 2.2 Block Check
         const blockStatus = await isPlayerBlocked(discordId);

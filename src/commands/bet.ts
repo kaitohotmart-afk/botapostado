@@ -43,27 +43,8 @@ export async function handleBetCommand(req: VercelRequest, res: VercelResponse, 
     const isStaff = hasAdminPermission || hasStaffRole;
     const isPrivileged = isStaff || hasVipRole;
 
-    // 2. Anti-Spam Check: Limit of 2 active bets for non-privileged users
-    if (!isPrivileged) {
-        // Count bets where user is creator/player and status is 'aguardando' or 'aceita'
-        const { count, error: countError } = await supabase
-            .from('bets')
-            .select('*', { count: 'exact', head: true })
-            .eq('criador_admin_id', adminId)
-            .in('status', ['aguardando', 'aceita']);
-
-        if (countError) {
-            console.error('Error counting active bets:', countError);
-        } else if (count !== null && count >= 2) {
-            return res.status(200).json({
-                type: InteractionResponseType.CHANNEL_MESSAGE_WITH_SOURCE,
-                data: {
-                    content: '❌ Você já tem 2 apostas abertas. Você precisa que uma delas seja paga ou cancelada para criar uma nova. Torne-se VIP para criar sem limites!',
-                    flags: 64
-                }
-            });
-        }
-    }
+    // 2. Anti-Spam Check: REMOVED as per user request
+    // Users can now create unlimited bets.
 
     // 2.1 Block Check
     const blockStatus = await isPlayerBlocked(adminId);
@@ -150,17 +131,7 @@ export async function handleBetCommand(req: VercelRequest, res: VercelResponse, 
         if (betError) throw betError;
 
         // 4. Check if we should remove the "Criador de Apostas" role
-        if (!isPrivileged) {
-            const { count } = await supabase
-                .from('bets')
-                .select('*', { count: 'exact', head: true })
-                .eq('criador_admin_id', adminId)
-                .in('status', ['aguardando', 'aceita']);
-
-            if (count !== null && count >= 2) {
-                await removeCreatorRole(guild_id, adminId);
-            }
-        }
+        // REMOVED: Limits are gone, so we don't need to remove the role based on count.
 
         // 5. Send public message to #apostas-abertas
         const modoSalaText = modoSala === 'full_mobile' ? '📱 FULL MOBILE' : '📱💻 MISTO';
