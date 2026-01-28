@@ -3,42 +3,47 @@ import { InteractionResponseType, MessageComponentTypes, ButtonStyleTypes } from
 import { supabase } from '../utils/supabase.js';
 import { hasCreatorRole, removeCreatorRole } from '../utils/roles.js';
 import { isPlayerBlocked } from '../utils/faults.js';
+import { rest } from '../utils/discord.js';
+import { Routes } from 'discord.js';
 
 export async function handleBetCommand(req: VercelRequest, res: VercelResponse, interaction: any) {
     const { member, data, guild_id } = interaction;
     const adminId = member.user.id;
 
-    // 1. Check if user has permission to create bets
-    // Allow if: Administrator permission, or has Dono/botAP/Diamante role, or has "Criador de Apostas" role
+    // 1. Check if user is Admin (for 0/2 logic)
     const memberRoles = member.roles || [];
     const memberPermissions = member.permissions || '0';
-
-    // Check if user has ADMINISTRATOR permission (bitfield 0x8 = 8)
     const ADMINISTRATOR_PERMISSION = BigInt(8);
     const userPermissions = BigInt(memberPermissions);
     const hasAdminPermission = (userPermissions & ADMINISTRATOR_PERMISSION) !== BigInt(0);
 
-    // Check for specific roles
     let hasAdminRole = false;
     if (interaction.data.resolved?.roles) {
         const roles = interaction.data.resolved.roles;
         hasAdminRole = memberRoles.some((roleId: string) => {
             const role = roles[roleId];
-            return role && (role.name === 'Dono' || role.name === 'botAP' || role.name === 'Diamante');
+            return role && (role.name === 'Dono' || role.name === 'botAP');
         });
     }
 
-    const isCreator = await hasCreatorRole(guild_id, member);
     const isAdmin = hasAdminPermission || hasAdminRole;
 
-    if (!isAdmin && !isCreator) {
-        return res.status(200).json({
-            type: InteractionResponseType.CHANNEL_MESSAGE_WITH_SOURCE,
-            data: {
-                content: '❌ Apenas administradores, membros com cargo **Dono**/**botAP**, **Diamante** ou **Criador de Apostas** podem criar apostas.',
-                flags: 64
+    // 1.1 Configure Channel Permissions (Ensure only slash commands are allowed)
+    try {
+        const channelId = interaction.channel_id;
+        // SEND_MESSAGES: 0x800 (2048)
+        // USE_APPLICATION_COMMANDS: 0x80000000 (2147483648)
+        // We want to DENY SEND_MESSAGES and ALLOW USE_APPLICATION_COMMANDS for @everyone
+        await rest.put(Routes.channelPermission(channelId, guild_id), {
+            body: {
+                type: 0, // role (@everyone)
+                allow: '2147483648', // USE_APPLICATION_COMMANDS
+                deny: '2048' // SEND_MESSAGES
             }
         });
+    } catch (error) {
+        console.error('Error configuring channel permissions:', error);
+        // We continue even if this fails, as it's a non-critical UX improvement
     }
 
     // 2. Anti-Spam Check: Limit of 2 active bets for non-admins
