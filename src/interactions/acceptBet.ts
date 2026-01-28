@@ -3,7 +3,7 @@ import { InteractionResponseType, MessageComponentTypes, ButtonStyleTypes } from
 import { supabase } from '../utils/supabase.js';
 import { rest } from '../utils/discord.js';
 import { Routes } from 'discord.js';
-import { isPlayerBlocked } from '../utils/faults.js';
+import { isPlayerBlocked, checkAndApplyActiveChatBan } from '../utils/faults.js';
 
 export async function handleAcceptBet(req: VercelRequest, res: VercelResponse, interaction: any, betId: string) {
     const { member, guild_id } = interaction;
@@ -40,29 +40,27 @@ export async function handleAcceptBet(req: VercelRequest, res: VercelResponse, i
             });
         }
 
-        // 2.1 Anti-Spam Check: Limit of 2 active participations for non-privileged users
+        // 2.1 Anti-Spam Check: Limit of 5 active participations for non-privileged users
         const memberPermissions = BigInt(member.permissions || '0');
         const ADMINISTRATOR_PERMISSION = BigInt(8);
         const hasAdminPermission = (memberPermissions & ADMINISTRATOR_PERMISSION) !== BigInt(0);
 
-        // In button interactions, we don't get 'resolved' roles.
-        // We check admin permission first. For VIPs, we would ideally fetch the member,
-        // but for now we'll rely on the participation count check which is the main constraint.
         let isPrivileged = hasAdminPermission;
 
+        // Count bets where user is a participant and status is 'aceita', 'paga', or 'em_jogo'
         const { count: participationCount, error: partError } = await supabase
             .from('bets')
             .select('*', { count: 'exact', head: true })
-            .or(`criador_admin_id.eq.${discordId},jogador1_id.eq.${discordId},jogador2_id.eq.${discordId}`)
-            .in('status', ['aguardando', 'aceita', 'paga', 'em_jogo']);
+            .or(`jogador1_id.eq.${discordId},jogador2_id.eq.${discordId}`)
+            .in('status', ['aceita', 'paga', 'em_jogo']);
 
         if (partError) {
             console.error('Error counting participations:', partError);
-        } else if (!isPrivileged && participationCount !== null && participationCount >= 2) {
+        } else if (!isPrivileged && participationCount !== null && participationCount >= 5) {
             return res.status(200).json({
                 type: InteractionResponseType.CHANNEL_MESSAGE_WITH_SOURCE,
                 data: {
-                    content: '❌ Você já está participando de 2 apostas ativas. Usuários comuns podem ter no máximo 2 apostas ao mesmo tempo. Torne-se VIP para jogar sem limites!',
+                    content: '❌ Você já está participando de 5 apostas ativas. Você precisa finalizar algumas para aceitar novas. Torne-se VIP para jogar sem limites!',
                     flags: 64
                 }
             });
@@ -76,6 +74,19 @@ export async function handleAcceptBet(req: VercelRequest, res: VercelResponse, i
                 type: InteractionResponseType.CHANNEL_MESSAGE_WITH_SOURCE,
                 data: {
                     content: `❌ Você está bloqueado de participar de apostas até **${untilDate}** devido ao acúmulo de faltas.`,
+                    flags: 64
+                }
+            });
+        }
+
+        // 2.3 Active Chat Limit Check (Penalty)
+        const chatBanStatus = await checkAndApplyActiveChatBan(discordId);
+        if (chatBanStatus.banned) {
+            const untilDate = new Date(chatBanStatus.until!).toLocaleString('pt-MZ');
+            return res.status(200).json({
+                type: InteractionResponseType.CHANNEL_MESSAGE_WITH_SOURCE,
+                data: {
+                    content: `❌ Você foi banido por 1 dia até **${untilDate}** por ter mais de 7 chats ativos sem finalização. Por favor, finalize suas apostas pendentes.`,
                     flags: 64
                 }
             });
@@ -198,14 +209,14 @@ export async function handleAcceptBet(req: VercelRequest, res: VercelResponse, i
                 {
                     id: player1Id,
                     type: 1,
-                    deny: DENY_SEND,
-                    allow: ALLOW_VIEW_ONLY,
+                    deny: '0',
+                    allow: ALLOW_VIEW_SEND,
                 },
                 {
                     id: player2Id,
                     type: 1,
-                    deny: DENY_SEND,
-                    allow: ALLOW_VIEW_ONLY,
+                    deny: '0',
+                    allow: ALLOW_VIEW_SEND,
                 }
             ],
         };
@@ -246,7 +257,7 @@ export async function handleAcceptBet(req: VercelRequest, res: VercelResponse, i
                 embeds: [
                     {
                         title: '⚔️ PARTIDA CONFIRMADA',
-                        description: `Aposta entre <@${player1Id}> e <@${player2Id}>.\n\n🔒 **O chat está bloqueado até que o pagamento seja confirmado.**`,
+                        description: `Aposta entre <@${player1Id}> e <@${player2Id}>.\n\n✅ **O chat está liberado! Conversem e combinem a partida.**`,
                         color: 0x00FF00,
                         fields: [
                             { name: 'Modo', value: modoNome, inline: true },

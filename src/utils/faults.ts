@@ -75,3 +75,40 @@ export async function isPlayerBlocked(discordId: string): Promise<{ blocked: boo
 
     return { blocked: false };
 }
+
+/**
+ * Checks if a player has more than 7 active chats and applies a 1-day ban if so.
+ * Active chats are bets with status 'aceita', 'paga', or 'em_jogo'.
+ */
+export async function checkAndApplyActiveChatBan(discordId: string): Promise<{ banned: boolean; until?: string }> {
+    const { count, error } = await supabase
+        .from('bets')
+        .select('*', { count: 'exact', head: true })
+        .or(`jogador1_id.eq.${discordId},jogador2_id.eq.${discordId}`)
+        .in('status', ['aceita', 'paga', 'em_jogo']);
+
+    if (error) {
+        console.error(`Error counting active chats for player ${discordId}:`, error);
+        return { banned: false };
+    }
+
+    if (count !== null && count > 7) {
+        const untilDate = new Date();
+        untilDate.setHours(untilDate.getHours() + 24);
+
+        const { error: updateError } = await supabase
+            .from('players')
+            .update({
+                bloqueado_ate: untilDate.toISOString()
+            })
+            .eq('discord_id', discordId);
+
+        if (updateError) {
+            console.error(`Error applying active chat ban for player ${discordId}:`, updateError);
+        }
+
+        return { banned: true, until: untilDate.toISOString() };
+    }
+
+    return { banned: false };
+}

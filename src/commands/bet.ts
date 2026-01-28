@@ -2,7 +2,7 @@ import { VercelRequest, VercelResponse } from '@vercel/node';
 import { InteractionResponseType, MessageComponentTypes, ButtonStyleTypes } from 'discord-interactions';
 import { supabase } from '../utils/supabase.js';
 import { hasCreatorRole, removeCreatorRole } from '../utils/roles.js';
-import { isPlayerBlocked } from '../utils/faults.js';
+import { isPlayerBlocked, checkAndApplyActiveChatBan } from '../utils/faults.js';
 import { rest } from '../utils/discord.js';
 import { Routes } from 'discord.js';
 
@@ -45,12 +45,12 @@ export async function handleBetCommand(req: VercelRequest, res: VercelResponse, 
 
     // 2. Anti-Spam Check: Limit of 2 active bets for non-privileged users
     if (!isPrivileged) {
-        // Check both as creator and as player
+        // Count bets where user is creator/player and status is 'aguardando' or 'aceita'
         const { count, error: countError } = await supabase
             .from('bets')
             .select('*', { count: 'exact', head: true })
             .or(`criador_admin_id.eq.${adminId},jogador1_id.eq.${adminId},jogador2_id.eq.${adminId}`)
-            .in('status', ['aguardando', 'aceita', 'paga', 'em_jogo']);
+            .in('status', ['aguardando', 'aceita']);
 
         if (countError) {
             console.error('Error counting active bets:', countError);
@@ -58,7 +58,7 @@ export async function handleBetCommand(req: VercelRequest, res: VercelResponse, 
             return res.status(200).json({
                 type: InteractionResponseType.CHANNEL_MESSAGE_WITH_SOURCE,
                 data: {
-                    content: '❌ Você já tem 2 apostas ativas. Usuários comuns podem ter no máximo 2 apostas ao mesmo tempo. Torne-se VIP para criar sem limites!',
+                    content: '❌ Você já tem 2 apostas abertas. Você precisa que uma delas seja paga ou cancelada para criar uma nova. Torne-se VIP para criar sem limites!',
                     flags: 64
                 }
             });
@@ -73,6 +73,19 @@ export async function handleBetCommand(req: VercelRequest, res: VercelResponse, 
             type: InteractionResponseType.CHANNEL_MESSAGE_WITH_SOURCE,
             data: {
                 content: `❌ Você está bloqueado de criar apostas até **${untilDate}** devido ao acúmulo de faltas.`,
+                flags: 64
+            }
+        });
+    }
+
+    // 2.2 Active Chat Limit Check (Penalty)
+    const chatBanStatus = await checkAndApplyActiveChatBan(adminId);
+    if (chatBanStatus.banned) {
+        const untilDate = new Date(chatBanStatus.until!).toLocaleString('pt-MZ');
+        return res.status(200).json({
+            type: InteractionResponseType.CHANNEL_MESSAGE_WITH_SOURCE,
+            data: {
+                content: `❌ Você foi banido por 1 dia até **${untilDate}** por ter mais de 7 chats ativos sem finalização. Por favor, finalize suas apostas pendentes.`,
                 flags: 64
             }
         });
@@ -142,14 +155,14 @@ export async function handleBetCommand(req: VercelRequest, res: VercelResponse, 
                 .from('bets')
                 .select('*', { count: 'exact', head: true })
                 .or(`criador_admin_id.eq.${adminId},jogador1_id.eq.${adminId},jogador2_id.eq.${adminId}`)
-                .in('status', ['aguardando', 'aceita', 'paga', 'em_jogo']);
+                .in('status', ['aguardando', 'aceita']);
 
             if (count !== null && count >= 2) {
                 await removeCreatorRole(guild_id, adminId);
             }
         }
 
-        // 5. Send public message with ONE accept button
+        // 5. Send public message to #apostas-abertas
         const modoSalaText = modoSala === 'full_mobile' ? '📱 FULL MOBILE' : '📱💻 MISTO';
         const modoNome = modo.replace('_', ' ').toUpperCase();
         const estiloSalaText = estiloSala === 'tatico' ? '🎯 TÁTICO' : '🎮 NORMAL';
@@ -158,40 +171,53 @@ export async function handleBetCommand(req: VercelRequest, res: VercelResponse, 
             ? 'Qualquer jogador pode aceitar esta aposta.\n\n⚠️ **Os nomes dos jogadores serão revelados apenas após 2 jogadores aceitarem.**'
             : `Aposta criada por <@${adminId}>. Aguardando um adversário para aceitar.\n\n⚠️ **Os nomes dos jogadores serão revelados apenas após o adversário aceitar.**`;
 
+        // Find #apostas-abertas channel
+        const channels = await rest.get(Routes.guildChannels(guild_id)) as any[];
+        const publicChannel = channels.find(c => c.name === 'apostas-abertas');
+
+        if (publicChannel) {
+            await rest.post(Routes.channelMessages(publicChannel.id), {
+                body: {
+                    content: `🚨 **Nova aposta disponível!** @everyone\nTipo: **${modoNome}**\nModo: **${estiloSalaText}**\nValor: **${valor}MT**`,
+                    embeds: [
+                        {
+                            title: '🔥 NOVA APOSTA DISPONÍVEL',
+                            description: embedDescription,
+                            color: 0xFF6B6B,
+                            fields: [
+                                { name: 'Modo', value: modoNome, inline: true },
+                                { name: 'Valor', value: `${valor} MZN`, inline: true },
+                                { name: 'Tipo de Sala', value: modoSalaText, inline: true },
+                                { name: 'Estilo', value: estiloSalaText, inline: true },
+                                { name: 'Status', value: statusText, inline: false },
+                            ],
+                            footer: { text: `Bet ID: ${bet.id}` },
+                            timestamp: new Date().toISOString()
+                        }
+                    ],
+                    components: [
+                        {
+                            type: MessageComponentTypes.ACTION_ROW,
+                            components: [
+                                {
+                                    type: MessageComponentTypes.BUTTON,
+                                    style: ButtonStyleTypes.SUCCESS,
+                                    label: 'Aceitar Aposta',
+                                    custom_id: `accept_bet:${bet.id}`,
+                                    emoji: { name: '✅' }
+                                }
+                            ]
+                        }
+                    ]
+                }
+            });
+        }
+
         return res.status(200).json({
             type: InteractionResponseType.CHANNEL_MESSAGE_WITH_SOURCE,
             data: {
-                content: `🚨 **Nova aposta disponível!** @everyone\nTipo: **${modoNome}**\nModo: **${estiloSalaText}**\nValor: **${valor}MT**`,
-                embeds: [
-                    {
-                        title: '🔥 NOVA APOSTA DISPONÍVEL',
-                        description: embedDescription,
-                        color: 0xFF6B6B,
-                        fields: [
-                            { name: 'Modo', value: modoNome, inline: true },
-                            { name: 'Valor', value: `${valor} MZN`, inline: true },
-                            { name: 'Tipo de Sala', value: modoSalaText, inline: true },
-                            { name: 'Estilo', value: estiloSalaText, inline: true },
-                            { name: 'Status', value: statusText, inline: false },
-                        ],
-                        footer: { text: `Bet ID: ${bet.id}` },
-                        timestamp: new Date().toISOString()
-                    }
-                ],
-                components: [
-                    {
-                        type: MessageComponentTypes.ACTION_ROW,
-                        components: [
-                            {
-                                type: MessageComponentTypes.BUTTON,
-                                style: ButtonStyleTypes.SUCCESS,
-                                label: 'Aceitar Aposta',
-                                custom_id: `accept_bet:${bet.id}`,
-                                emoji: { name: '✅' }
-                            }
-                        ]
-                    }
-                ]
+                content: `✅ **Aposta criada com sucesso!**\nEla foi postada no canal <#${publicChannel?.id || 'apostas-abertas'}>.`,
+                flags: 64
             }
         });
 

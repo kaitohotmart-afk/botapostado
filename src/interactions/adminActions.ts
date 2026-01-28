@@ -63,24 +63,8 @@ export async function handleAdminAction(req: VercelRequest, res: VercelResponse,
 
             if (error) throw error;
 
-            // Unlock chat for both players
-            const channelId = bet.canal_pagamento_id;
-            if (channelId) {
-                // VIEW_CHANNEL (1024) + SEND_MESSAGES (2048) + ATTACH_FILES (32768)
-                // Total: 35840
-                const ALLOW_VIEW_SEND_ATTACH = '35840';
-
-                // Update permissions for both players
-                for (const playerId of [bet.jogador1_id, bet.jogador2_id]) {
-                    await rest.put(Routes.channelPermission(channelId, playerId), {
-                        body: {
-                            type: 1, // member
-                            allow: ALLOW_VIEW_SEND_ATTACH,
-                            deny: '0'
-                        }
-                    });
-                }
-            }
+            // Chat is already unlocked from the start now.
+            // No need to update permissions here.
 
             return res.status(200).json({
                 type: InteractionResponseType.CHANNEL_MESSAGE_WITH_SOURCE,

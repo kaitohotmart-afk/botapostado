@@ -6,7 +6,8 @@ const CATEGORY_NAME = 'SISTEMA DE APOSTAS';
 const CHANNELS = [
     { name: 'como-funciona', type: ChannelType.GuildText, topic: 'Instruções de como usar o bot de apostas.' },
     { name: 'ranking', type: ChannelType.GuildText, topic: 'Ranking de vitórias e derrotas.' },
-    { name: 'apostas-abertas', type: ChannelType.GuildText, topic: 'Canal para criar e aceitar apostas. Apenas comandos "/" são permitidos.' }
+    { name: 'criar-aposta', type: ChannelType.GuildText, topic: 'Canal para criar apostas. Apenas comandos "/" são permitidos.' },
+    { name: 'apostas-abertas', type: ChannelType.GuildText, topic: 'Canal fixo onde TODAS as apostas criadas aparecem.' }
 ];
 
 export async function setupGuildChannels(guildId: string) {
@@ -38,14 +39,23 @@ export async function setupGuildChannels(guildId: string) {
                     topic: channelDef.topic
                 };
 
-                // Special permissions for #apostas-abertas
-                if (channelDef.name === 'apostas-abertas') {
+                // Special permissions for #criar-aposta and #apostas-abertas
+                if (channelDef.name === 'criar-aposta') {
                     channelData.permission_overwrites = [
                         {
                             id: guildId, // @everyone
                             type: 0,
                             deny: PermissionFlagsBits.SendMessages.toString(),
                             allow: (PermissionFlagsBits.UseApplicationCommands | PermissionFlagsBits.ViewChannel).toString()
+                        }
+                    ];
+                } else if (channelDef.name === 'apostas-abertas') {
+                    channelData.permission_overwrites = [
+                        {
+                            id: guildId, // @everyone
+                            type: 0,
+                            deny: PermissionFlagsBits.SendMessages.toString(),
+                            allow: PermissionFlagsBits.ViewChannel.toString()
                         }
                     ];
                 } else {
@@ -87,7 +97,7 @@ export async function updateInstructions(channelId: string) {
         fields: [
             {
                 name: '🎮 Como criar uma aposta',
-                value: 'Use o comando `/apostar` no canal <#apostas-abertas>. Escolha o modo, valor e estilo da sala.'
+                value: 'Use o comando `/apostar` no canal <#criar-aposta>. Escolha o modo, valor e estilo da sala.'
             },
             {
                 name: '✅ Como aceitar uma aposta',
@@ -95,19 +105,19 @@ export async function updateInstructions(channelId: string) {
             },
             {
                 name: '🎮 Limites de Apostas',
-                value: '• **Usuários Comuns:** Máximo de 2 apostas ativas (criadas ou aceitas).\n• **VIP / Diamante:** Criação de apostas ilimitada!'
+                value: '• **Criação:** Máximo de 2 apostas abertas por jogador.\n• **Participação:** Máximo de 5 apostas simultâneas.\n• **VIP / Diamante:** Criação de apostas ilimitada!'
             },
             {
                 name: '💳 Pagamentos',
-                value: 'Após a aposta ser aceita, um canal privado será criado. Siga as instruções lá para realizar o pagamento via M-Pesa/E-Mola.'
+                value: 'Após a aposta ser aceita, um canal privado será criado. Siga as instruções lá para realizar o pagamento.'
             },
             {
                 name: '⚖️ Validação',
                 value: 'O resultado da partida deve ser enviado no canal privado e será validado pela nossa administração.'
             },
             {
-                name: '🚫 Regras',
-                value: '• Apenas comandos `/` são permitidos no canal de apostas.\n• Respeite os outros jogadores.\n• Faltas resultam em bloqueio temporário.'
+                name: '🚫 Regras e Penalidades',
+                value: '• Apenas comandos `/` são permitidos no canal de criação.\n• Se tiver mais de 7 chats ativos sem fechar, você será banido por 1 dia.\n• Respeite os outros jogadores.'
             }
         ],
         footer: { text: 'KAITO FF - O melhor bot de apostas' }
