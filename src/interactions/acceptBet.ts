@@ -57,7 +57,7 @@ export async function handleAcceptBet(req: VercelRequest, res: VercelResponse, i
             .from('bets')
             .select('*', { count: 'exact', head: true })
             .or(`jogador1_id.eq.${discordId},jogador2_id.eq.${discordId}`)
-            .not('status', 'in', '("finalizada", "cancelada")');
+            .in('status', ['aguardando', 'aceita', 'paga', 'em_jogo']);
 
         if (partError) {
             console.error('Error counting participations:', partError);

@@ -314,7 +314,7 @@ export async function handleSelectWinner(req: VercelRequest, res: VercelResponse
                 .from('bets')
                 .select('*', { count: 'exact', head: true })
                 .eq('criador_admin_id', bet.criador_admin_id)
-                .not('status', 'in', '("finalizada", "cancelada")');
+                .in('status', ['aguardando', 'aceita', 'paga', 'em_jogo']);
 
             if (count !== null && count < 2) {
                 await addCreatorRole(interaction.guild_id, bet.criador_admin_id);

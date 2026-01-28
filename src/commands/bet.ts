@@ -6,9 +6,14 @@ import { isPlayerBlocked } from '../utils/faults.js';
 import { rest } from '../utils/discord.js';
 import { Routes } from 'discord.js';
 
+import { setupGuildChannels } from '../utils/setup.js';
+
 export async function handleBetCommand(req: VercelRequest, res: VercelResponse, interaction: any) {
     const { member, data, guild_id } = interaction;
     const adminId = member.user.id;
+
+    // Ensure channels exist
+    await setupGuildChannels(guild_id);
 
     // 1. Check if user is Admin or has Special Role (VIP, Diamante)
     const memberRoles = member.roles || [];
@@ -40,11 +45,13 @@ export async function handleBetCommand(req: VercelRequest, res: VercelResponse, 
 
     // 2. Anti-Spam Check: Limit of 2 active bets for non-privileged users
     if (!isPrivileged) {
+        // Active statuses: aguardando, aceita, paga, em_jogo
+        // Inactive statuses: finalizada, cancelada, expirada, wo
         const { count, error: countError } = await supabase
             .from('bets')
             .select('*', { count: 'exact', head: true })
             .eq('criador_admin_id', adminId)
-            .not('status', 'in', '("finalizada", "cancelada")');
+            .in('status', ['aguardando', 'aceita', 'paga', 'em_jogo']);
 
         if (countError) {
             console.error('Error counting active bets:', countError);
@@ -136,7 +143,7 @@ export async function handleBetCommand(req: VercelRequest, res: VercelResponse, 
                 .from('bets')
                 .select('*', { count: 'exact', head: true })
                 .eq('criador_admin_id', adminId)
-                .not('status', 'in', '("finalizada", "cancelada")');
+                .in('status', ['aguardando', 'aceita', 'paga', 'em_jogo']);
 
             if (count !== null && count >= 2) {
                 await removeCreatorRole(guild_id, adminId);

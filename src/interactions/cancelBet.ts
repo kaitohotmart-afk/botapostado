@@ -56,7 +56,7 @@ export async function handleCancelBet(req: VercelRequest, res: VercelResponse, i
                 .from('bets')
                 .select('*', { count: 'exact', head: true })
                 .eq('criador_admin_id', discordId)
-                .not('status', 'in', '("finalizada", "cancelada")');
+                .in('status', ['aguardando', 'aceita', 'paga', 'em_jogo']);
 
             if (count !== null && count < 2) {
                 await addCreatorRole(interaction.guild_id, discordId);

@@ -48,11 +48,28 @@ export async function setupGuildChannels(guildId: string) {
                             allow: PermissionFlagsBits.UseApplicationCommands.toString()
                         }
                     ];
+                } else {
+                    // Read-only for everyone else
+                    channelData.permission_overwrites = [
+                        {
+                            id: guildId, // @everyone
+                            type: 0,
+                            deny: PermissionFlagsBits.SendMessages.toString(),
+                            allow: PermissionFlagsBits.ViewChannel.toString()
+                        }
+                    ];
                 }
 
-                await rest.post(Routes.guildChannels(guildId), {
+                channel = await rest.post(Routes.guildChannels(guildId), {
                     body: channelData
                 });
+
+                // Populate content for new channels
+                if (channelDef.name === 'como-funciona') {
+                    await updateInstructions(channel.id);
+                } else if (channelDef.name === 'ranking') {
+                    await updateRanking(channel.id);
+                }
             }
         }
 
