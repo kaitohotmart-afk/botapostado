@@ -192,9 +192,7 @@ export async function handleAcceptBet(req: VercelRequest, res: VercelResponse, i
 
         // Permission bitflags as strings
         const DENY_VIEW = '1024';
-        const ALLOW_VIEW_ONLY = '1024';
-        const DENY_SEND = '2048';
-        const ALLOW_VIEW_SEND = '3072';
+        const ALLOW_VIEW_SEND_ATTACH = (BigInt(1024) | BigInt(2048) | BigInt(32768)).toString(); // VIEW + SEND + ATTACH
 
         const channelData = {
             name: channelName,
@@ -210,13 +208,13 @@ export async function handleAcceptBet(req: VercelRequest, res: VercelResponse, i
                     id: player1Id,
                     type: 1,
                     deny: '0',
-                    allow: ALLOW_VIEW_SEND,
+                    allow: ALLOW_VIEW_SEND_ATTACH,
                 },
                 {
                     id: player2Id,
                     type: 1,
                     deny: '0',
-                    allow: ALLOW_VIEW_SEND,
+                    allow: ALLOW_VIEW_SEND_ATTACH,
                 }
             ],
         };
@@ -228,7 +226,7 @@ export async function handleAcceptBet(req: VercelRequest, res: VercelResponse, i
                 id: bet.criador_admin_id,
                 type: 1,
                 deny: '0',
-                allow: ALLOW_VIEW_SEND,
+                allow: ALLOW_VIEW_SEND_ATTACH,
             });
         }
 
@@ -253,11 +251,11 @@ export async function handleAcceptBet(req: VercelRequest, res: VercelResponse, i
 
         await rest.post(Routes.channelMessages(channel.id), {
             body: {
-                content: `🔔 **Aposta Iniciada!**\nJogadores: <@${player1Id}> vs <@${player2Id}>\nAdmin/Criador: <@${bet.criador_admin_id}>`,
+                content: `🔔 **Aposta Iniciada!**\nJogadores: **Jogador 1** vs **Jogador 2**\nAdmin/Criador: **Oculto**`,
                 embeds: [
                     {
                         title: '⚔️ PARTIDA CONFIRMADA',
-                        description: `Aposta entre <@${player1Id}> e <@${player2Id}>.\n\n✅ **O chat está liberado! Conversem e combinem a partida.**`,
+                        description: `Aposta entre **Jogador 1** e **Jogador 2**.\n\n✅ **O chat está liberado! Conversem e combinem a partida.**\n\n⚠️ **Os nomes dos adversários serão revelados após a confirmação do pagamento.**`,
                         color: 0x00FF00,
                         fields: [
                             { name: 'Modo', value: modoNome, inline: true },
@@ -270,7 +268,7 @@ export async function handleAcceptBet(req: VercelRequest, res: VercelResponse, i
                     },
                     {
                         title: '💳 PAGAMENTO REQUERIDO',
-                        description: 'Selecione um administrador abaixo para ver os dados de pagamento e envie o comprovante neste canal.',
+                        description: 'Selecione um administrador abaixo para ver os dados de pagamento e envie o **comprovante (foto/arquivo)** neste canal.',
                         color: 0x3498DB,
                     }
                 ],

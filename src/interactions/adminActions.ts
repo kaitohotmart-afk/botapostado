@@ -69,7 +69,7 @@ export async function handleAdminAction(req: VercelRequest, res: VercelResponse,
             return res.status(200).json({
                 type: InteractionResponseType.CHANNEL_MESSAGE_WITH_SOURCE,
                 data: {
-                    content: `✅ **Pagamento confirmado!** Chat liberado.\n\n👤 **Jogador 1:** <@${bet.jogador1_id}>\n👤 **Jogador 2:** <@${bet.jogador2_id}>\n\nBoa sorte aos jogadores!`,
+                    content: `✅ **Pagamento confirmado!**\n\n👤 **Jogadores Revelados:**\n<@${bet.jogador1_id}> 🆚 <@${bet.jogador2_id}>\n\nBoa sorte aos jogadores!`,
                     allowed_mentions: { parse: ['users'] }
                 }
             });

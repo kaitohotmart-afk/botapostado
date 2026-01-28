@@ -45,8 +45,8 @@ export async function setupGuildChannels(guildId: string) {
                         {
                             id: guildId, // @everyone
                             type: 0,
-                            deny: PermissionFlagsBits.SendMessages.toString(),
-                            allow: (PermissionFlagsBits.UseApplicationCommands | PermissionFlagsBits.ViewChannel).toString()
+                            deny: '0',
+                            allow: (PermissionFlagsBits.UseApplicationCommands | PermissionFlagsBits.ViewChannel | PermissionFlagsBits.SendMessages).toString()
                         }
                     ];
                 } else if (channelDef.name === 'apostas-abertas') {
@@ -117,7 +117,7 @@ export async function updateInstructions(channelId: string) {
             },
             {
                 name: '🚫 Regras e Penalidades',
-                value: '• Apenas comandos `/` são permitidos no canal de criação.\n• Se tiver mais de 7 chats ativos sem fechar, você será banido por 1 dia.\n• Respeite os outros jogadores.'
+                value: '• **BAN AUTOMÁTICO (3 DIAS):** Para quem mandar mais de 5 mensagens normais no canal <#criar-aposta> que não sejam de comandos.\n• Ban para apostas sem sentido ou tentativa de criar chats indevidamente.\n• Se tiver mais de 7 chats ativos sem fechar, você será banido por 1 dia.\n• Respeite os outros jogadores.'
             }
         ],
         footer: { text: 'KAITO FF - O melhor bot de apostas' }
