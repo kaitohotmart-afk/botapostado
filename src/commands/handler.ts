@@ -14,7 +14,9 @@ export async function handleCommand(req: VercelRequest, res: VercelResponse, int
             type: InteractionResponseType.DEFERRED_CHANNEL_MESSAGE_WITH_SOURCE,
             data: { flags: 64 }
         });
-        return handleBetCommand(req, res, interaction);
+        // Don't return - response already sent
+        await handleBetCommand(req, res, interaction);
+        return;
     }
 
     if (name === 'ranking') {
@@ -36,8 +38,10 @@ export async function handleCommand(req: VercelRequest, res: VercelResponse, int
             data: { flags: 64 }
         });
 
+        // Don't return - response already sent
         const { handleSetupQueueCommand } = await import('./setupQueue.js');
-        return handleSetupQueueCommand(req, res, interaction);
+        await handleSetupQueueCommand(req, res, interaction);
+        return;
     }
 
     return res.status(400).json({ error: 'Unknown command' });
