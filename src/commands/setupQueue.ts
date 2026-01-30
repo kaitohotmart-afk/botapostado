@@ -66,6 +66,7 @@ export async function handleSetupQueueCommand(req: VercelRequest, res: VercelRes
         '4x4': 8
     };
 
+
     const requiredPlayers = reqPlayersMap[mode];
 
     if (!requiredPlayers) {
@@ -77,6 +78,12 @@ export async function handleSetupQueueCommand(req: VercelRequest, res: VercelRes
             }
         });
     }
+
+    // ✅ RESPOND IMMEDIATELY to avoid timeout (before slow operations)
+    res.status(200).json({
+        type: InteractionResponseType.DEFERRED_CHANNEL_MESSAGE_WITH_SOURCE,
+        data: { flags: 64 }
+    });
 
     // 2. Create the Embed Message
     const embedTitle = `COMBATE ${mode} - ${betValue}MT`;
@@ -145,22 +152,23 @@ export async function handleSetupQueueCommand(req: VercelRequest, res: VercelRes
             throw error;
         }
 
-        return res.status(200).json({
-            type: InteractionResponseType.CHANNEL_MESSAGE_WITH_SOURCE,
-            data: {
+        // Use webhook followup since we already responded with deferred
+        await rest.post(Routes.webhookMessage(interaction.application_id, interaction.token), {
+            body: {
                 content: `✅ Fila **${mode} ${betValue}MT** criada com sucesso!`,
-                flags: 64 // Ephemeral
+                flags: 64
             }
         });
+        return;
 
     } catch (e) {
         console.error(e);
-        return res.status(200).json({
-            type: InteractionResponseType.CHANNEL_MESSAGE_WITH_SOURCE,
-            data: {
+        await rest.post(Routes.webhookMessage(interaction.application_id, interaction.token), {
+            body: {
                 content: '❌ Erro ao criar fila.',
                 flags: 64
             }
         });
+        return;
     }
 }
