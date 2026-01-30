@@ -19,5 +19,10 @@ export async function handleCommand(req: VercelRequest, res: VercelResponse, int
         return handleProfileCommand(req, res, interaction);
     }
 
+    if (name === 'setup_queue') {
+        const { handleSetupQueueCommand } = await import('./setupQueue.js');
+        return handleSetupQueueCommand(req, res, interaction);
+    }
+
     return res.status(400).json({ error: 'Unknown command' });
 }

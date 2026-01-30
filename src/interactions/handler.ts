@@ -42,6 +42,18 @@ export async function handleComponent(req: VercelRequest, res: VercelResponse, i
         return handleCloseChannel(req, res, interaction, channelId);
     }
 
+    // New Queue System
+    if (custom_id === 'join_queue' || custom_id === 'leave_queue') {
+        const { handleQueueInteraction } = await import('./queue.js');
+        return handleQueueInteraction(req, res, interaction);
+    }
+
+    if (custom_id.startsWith('match_') || ((custom_id.startsWith('win_team_a') || custom_id.startsWith('win_team_b')) && !custom_id.includes(':select_winner:'))) {
+        // match_finalize, match_cancel, win_team_a, win_team_b
+        const { handleMatchControl } = await import('./matchControl.js');
+        return handleMatchControl(req, res, interaction);
+    }
+
     return res.status(200).json({
         type: InteractionResponseType.CHANNEL_MESSAGE_WITH_SOURCE,
         data: {

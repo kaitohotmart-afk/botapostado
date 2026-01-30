@@ -57,6 +57,35 @@ const commands = [
                 .setDescription('Usuário para ver o perfil')
                 .setRequired(false)
         ),
+    new SlashCommandBuilder()
+        .setName('setup_queue')
+        .setDescription('Configura uma fila automática (Admin)')
+        .setDefaultMemberPermissions('8') // Administrator
+        .addStringOption(option =>
+            option.setName('mode')
+                .setDescription('Modo de jogo (1x1, 2x2, etc)')
+                .setRequired(true)
+                .addChoices(
+                    { name: '1x1', value: '1x1' },
+                    { name: '2x2', value: '2x2' },
+                    { name: '3x3', value: '3x3' },
+                    { name: '4x4', value: '4x4' }
+                )
+        )
+        .addNumberOption(option =>
+            option.setName('value')
+                .setDescription('Valor da aposta')
+                .setRequired(true)
+        )
+        .addStringOption(option =>
+            option.setName('platform')
+                .setDescription('Plataforma permitida')
+                .setRequired(false)
+                .addChoices(
+                    { name: 'Mobile Only', value: 'mobile' },
+                    { name: 'Misto', value: 'mixed' }
+                )
+        ),
 ].map(command => command.toJSON());
 
 const rest = new REST({ version: '10' }).setToken(process.env.DISCORD_TOKEN!);
