@@ -54,6 +54,22 @@ export async function handleComponent(req: VercelRequest, res: VercelResponse, i
         return handleMatchControl(req, res, interaction);
     }
 
+    // Panel Buttons
+    if (custom_id === 'btn_profile') {
+        const { handleProfileCommand } = await import('../commands/profile.js');
+        return handleProfileCommand(req, res, { ...interaction, data: { options: [] } });
+    }
+
+    if (custom_id === 'btn_ranking_queues') {
+        const { handleLeaderboardCommand } = await import('../commands/leaderboard.js');
+        return handleLeaderboardCommand(req, res, { ...interaction, data: { options: [{ value: 'filas' }] } });
+    }
+
+    if (custom_id === 'btn_ranking_general') {
+        const { handleLeaderboardCommand } = await import('../commands/leaderboard.js');
+        return handleLeaderboardCommand(req, res, { ...interaction, data: { options: [{ value: 'general' }] } });
+    }
+
     return res.status(200).json({
         type: InteractionResponseType.CHANNEL_MESSAGE_WITH_SOURCE,
         data: {

@@ -47,6 +47,20 @@ const commands = [
     new SlashCommandBuilder()
         .setName('ranking')
         .setDescription('Mostra o ranking dos melhores jogadores')
+        .setDefaultMemberPermissions(null)
+        .addStringOption(option =>
+            option.setName('tipo')
+                .setDescription('Tipo de ranking')
+                .addChoices(
+                    { name: 'Semanal', value: 'weekly' },
+                    { name: 'Mensal', value: 'monthly' },
+                    { name: 'Geral', value: 'general' },
+                    { name: 'Filas', value: 'filas' }
+                )
+        ),
+    new SlashCommandBuilder()
+        .setName('painel')
+        .setDescription('Abre o painel de controle do jogador')
         .setDefaultMemberPermissions(null),
     new SlashCommandBuilder()
         .setName('perfil')

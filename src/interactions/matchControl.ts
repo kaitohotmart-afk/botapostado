@@ -110,16 +110,19 @@ export async function handleMatchControl(req: any, res: any, interaction: any) {
         const { data: bet } = await supabase.from('bets').select('*').eq('id', betId).single();
         if (!bet) return res.status(200).send({ type: 4, data: { content: "Erro ao buscar aposta." } });
 
-        const winnerId = winningTeam === 'A' ? bet.jogador1_id : bet.jogador2_id; // Captains as proxy
-        // Ideally we update stats for ALL players in players_data.
+        const winnerTeam = winningTeam === 'A' ? bet.players_data?.teamA : bet.players_data?.teamB;
+        const loserTeam = winningTeam === 'A' ? bet.players_data?.teamB : bet.players_data?.teamA;
+
+        // If it's a legacy bet without players_data, fallback to jogador1/2
+        const winners = Array.isArray(winnerTeam) ? winnerTeam : [winningTeam === 'A' ? bet.jogador1_id : bet.jogador2_id];
+        const losers = Array.isArray(loserTeam) ? loserTeam : [winningTeam === 'A' ? bet.jogador2_id : bet.jogador1_id];
 
         const { error } = await supabase
             .from('bets')
             .update({
                 status: 'finalizada',
-                vencedor_id: winnerId,
+                vencedor_id: winners[0], // Keep captain as primary winner for backward compatibility
                 finalizado_em: new Date(),
-                // tipo_finalizacao: 'normal' 
             })
             .eq('id', betId);
 
@@ -130,13 +133,25 @@ export async function handleMatchControl(req: any, res: any, interaction: any) {
             });
         }
 
-        // Here we would update balances/stats for all players.
-        // Skipping detailed balance logic as it wasn't explicitly detailed in the "Prompt", 
-        // but implied by "Usar o já existente para salvar...".
-        // We should trigger the existing 'distributePrizes' or similar logic if it exists, or update the implementation.
-        // The user said "O painel web atual não deve ser alterado", so we must respect data consistency.
+        // Update Stats & Levels for ALL players
+        const betValue = Number(bet.valor);
+        const winProfit = betValue; // Simple profit calculation for now
+        const lossAmount = -betValue;
 
-        // Delete Channel
+        const { incrementPlayerStats, updatePlayerLevel } = await import('../utils/levels.js');
+
+        await Promise.all([
+            ...winners.map(uid =>
+                incrementPlayerStats(uid, true, betValue, winProfit)
+                    .then(() => updatePlayerLevel(uid, interaction.guild_id))
+            ),
+            ...losers.map(uid =>
+                incrementPlayerStats(uid, false, betValue, lossAmount)
+                    .then(() => updatePlayerLevel(uid, interaction.guild_id))
+            )
+        ]);
+
+        // Delete Channel after 10 seconds
         setTimeout(() => {
             rest.delete(Routes.channel(channel_id)).catch(console.error);
         }, 10000);

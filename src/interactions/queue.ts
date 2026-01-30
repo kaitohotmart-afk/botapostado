@@ -8,10 +8,18 @@ import { handleQueueFull } from '../utils/queueManager.js';
 
 export async function handleQueueInteraction(req: any, res: any, interaction: any) {
     const { message, member, data, custom_id } = interaction;
-    const userId = member.user.id;
-    const messageId = message.id;
+    const userId = member?.user?.id || interaction?.user?.id;
+    const messageId = message?.id;
 
-    const action = custom_id; // 'join_queue' or 'leave_queue'
+    if (!userId || !messageId) {
+        console.error("Missing interaction data:", { userId, messageId });
+        return res.status(200).json({
+            type: InteractionResponseType.CHANNEL_MESSAGE_WITH_SOURCE,
+            data: { content: '❌ Erro: Dados da interação incompletos.', flags: 64 }
+        });
+    }
+
+    const action = custom_id;
 
     try {
         // 1. Fetch Queue Data
@@ -45,11 +53,11 @@ export async function handleQueueInteraction(req: any, res: any, interaction: an
                 });
             }
 
-            // Check if in other queues
+            // Corrected filter: pass the array directly
             const { data: activeQueues } = await supabase
                 .from('queues')
                 .select('id')
-                .contains('current_players', JSON.stringify([userId]));
+                .contains('current_players', [userId]);
 
             if (activeQueues && activeQueues.length > 0) {
                 return res.status(200).json({
@@ -58,23 +66,28 @@ export async function handleQueueInteraction(req: any, res: any, interaction: an
                 });
             }
 
-            currentPlayers.push(userId);
+            // Update local list and DB
+            const updatedPlayers = [...currentPlayers, userId];
 
-            await supabase
+            const { error: updateError } = await supabase
                 .from('queues')
-                .update({ current_players: currentPlayers })
+                .update({ current_players: updatedPlayers })
                 .eq('id', queue.id);
 
+            if (updateError) throw updateError;
+
             // Respond with Type 7 to update embed instantly
-            const embed = generateQueueEmbed(queue, currentPlayers);
+            const embed = generateQueueEmbed(queue, updatedPlayers);
             res.status(200).json({
                 type: 7, // UPDATE_MESSAGE
                 data: { embeds: [embed] }
             });
 
-            // If full, trigger match creation in background
-            if (currentPlayers.length >= queue.required_players) {
-                handleQueueFull(queue, currentPlayers).catch(err => console.error("Match creation error:", err));
+            // If full, trigger match creation in background with a delay
+            if (updatedPlayers.length >= queue.required_players) {
+                setTimeout(() => {
+                    handleQueueFull(queue, updatedPlayers).catch(err => console.error("Match creation error:", err));
+                }, 500);
             }
             return;
         }

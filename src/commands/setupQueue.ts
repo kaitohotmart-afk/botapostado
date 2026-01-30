@@ -8,16 +8,36 @@ import { Routes } from 'discord.js';
 export async function handleSetupQueueCommand(req: VercelRequest, res: VercelResponse, interaction: any) {
     const { member, data, guild_id, channel_id } = interaction;
 
-    // 1. Permission Check (Admin/Owner only)
+    // 1. Permission Check (Admin, Owner or Mediador)
     const isAdmin = (BigInt(member.permissions) & BigInt(8)) !== BigInt(0);
-    // You might want to add specific role checks here too if 'hasCreatorRole' is appropriate or strictly admin.
-    // For setup, usually just Admin/Staff.
 
-    if (!isAdmin) {
+    // Check if user is the guild owner
+    const guild = await rest.get(Routes.guild(guild_id)) as any;
+    const isOwner = member.user.id === guild.owner_id;
+
+    // Check for "Mediador" role
+    const roles = await rest.get(Routes.guildRoles(guild_id)) as any[];
+    let mediadorRole = roles.find(r => r.name.toLowerCase() === 'mediador');
+
+    if (!mediadorRole && isOwner) {
+        // Auto-create Mediador role if owner runs the command and it's missing
+        try {
+            mediadorRole = await rest.post(Routes.guildRoles(guild_id), {
+                body: { name: 'Mediador', color: 0x3498db, permissions: '0' }
+            }) as any;
+            console.log("Created 'Mediador' role.");
+        } catch (e) {
+            console.error("Failed to create Mediador role:", e);
+        }
+    }
+
+    const hasMediadorRole = mediadorRole ? member.roles.includes(mediadorRole.id) : false;
+
+    if (!isAdmin && !isOwner && !hasMediadorRole) {
         return res.status(200).json({
             type: InteractionResponseType.CHANNEL_MESSAGE_WITH_SOURCE,
             data: {
-                content: '❌ Apenas administradores podem configurar filas.',
+                content: '❌ Apenas Mediadores, Administradores ou o Dono do Servidor podem configurar filas.',
                 flags: 64
             }
         });

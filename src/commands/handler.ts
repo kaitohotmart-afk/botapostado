@@ -3,6 +3,7 @@ import { InteractionResponseType } from 'discord-interactions';
 import { handleBetCommand } from './bet.js';
 import { handleLeaderboardCommand } from './leaderboard.js';
 import { handleProfileCommand } from './profile.js';
+import { handlePanelCommand } from './panel.js';
 
 export async function handleCommand(req: VercelRequest, res: VercelResponse, interaction: any) {
     const { name } = interaction.data;
@@ -17,6 +18,10 @@ export async function handleCommand(req: VercelRequest, res: VercelResponse, int
 
     if (name === 'perfil') {
         return handleProfileCommand(req, res, interaction);
+    }
+
+    if (name === 'painel') {
+        return handlePanelCommand(req, res, interaction);
     }
 
     if (name === 'fila') {

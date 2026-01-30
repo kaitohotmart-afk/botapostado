@@ -21,6 +21,29 @@ export async function handleLeaderboardCommand(req: VercelRequest, res: VercelRe
                 .limit(10);
             data = result.data || [];
             error = result.error;
+        } else if (type === 'filas') {
+            title = '⚔️ Ranking de Filas';
+            // Logic: Count wins in 'bets' where queue_id is not null
+            // For a more performant solution, we would have a dedicated column in player_levels.
+            // But to keep current schema as-is, we query bets.
+            const { data: winners, error: winError } = await supabase
+                .from('bets')
+                .select('vencedor_id')
+                .not('queue_id', 'is', null)
+                .eq('status', 'finalizada');
+
+            if (winError) throw winError;
+
+            // Aggregate wins in JS for now (simpler than complex SQL via Supabase JS client for this specific requirement)
+            const counts: Record<string, number> = {};
+            winners.forEach(w => {
+                if (w.vencedor_id) counts[w.vencedor_id] = (counts[w.vencedor_id] || 0) + 1;
+            });
+
+            data = Object.entries(counts)
+                .map(([id, wins]) => ({ discord_id: id, wins }))
+                .sort((a, b) => b.wins - a.wins)
+                .slice(0, 10);
         } else {
             const { weeklySeasonId, monthlySeasonId } = getCurrentSeasonIDs();
             const seasonId = type === 'weekly' ? weeklySeasonId : monthlySeasonId;
