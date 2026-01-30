@@ -9,12 +9,6 @@ export async function handleSetupQueueCommand(req: VercelRequest, res: VercelRes
     const { member, data, guild_id, channel_id } = interaction;
     console.log('--- SETUP QUEUE START ---');
 
-    // CRITICAL: Defer reply immediately to prevent 3-second timeout
-    res.status(200).json({
-        type: InteractionResponseType.DEFERRED_CHANNEL_MESSAGE_WITH_SOURCE,
-        data: { flags: 64 } // Ephemeral
-    });
-
     // 1. Permission Check (Admin, Owner or Mediador)
     const permissions = BigInt(member.permissions);
     const isAdmin = (permissions & BigInt(8)) !== BigInt(0); // ADMINISTRATOR

@@ -9,6 +9,11 @@ export async function handleCommand(req: VercelRequest, res: VercelResponse, int
     const { name } = interaction.data;
 
     if (name === 'apostar') {
+        // CRITICAL: Defer reply BEFORE processing
+        res.status(200).json({
+            type: InteractionResponseType.DEFERRED_CHANNEL_MESSAGE_WITH_SOURCE,
+            data: { flags: 64 }
+        });
         return handleBetCommand(req, res, interaction);
     }
 
@@ -25,6 +30,12 @@ export async function handleCommand(req: VercelRequest, res: VercelResponse, int
     }
 
     if (name === 'fila') {
+        // CRITICAL: Defer reply BEFORE dynamic import to prevent timeout
+        res.status(200).json({
+            type: InteractionResponseType.DEFERRED_CHANNEL_MESSAGE_WITH_SOURCE,
+            data: { flags: 64 }
+        });
+
         const { handleSetupQueueCommand } = await import('./setupQueue.js');
         return handleSetupQueueCommand(req, res, interaction);
     }
