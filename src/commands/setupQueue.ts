@@ -7,33 +7,44 @@ import { Routes } from 'discord.js';
 
 export async function handleSetupQueueCommand(req: VercelRequest, res: VercelResponse, interaction: any) {
     const { member, data, guild_id, channel_id } = interaction;
+    console.log('--- SETUP QUEUE START ---');
 
     // 1. Permission Check (Admin, Owner or Mediador)
-    const isAdmin = (BigInt(member.permissions) & BigInt(8)) !== BigInt(0);
+    const permissions = BigInt(member.permissions);
+    const isAdmin = (permissions & BigInt(8)) !== BigInt(0); // ADMINISTRATOR
+    const canManageGuild = (permissions & BigInt(32)) !== BigInt(0); // MANAGE_GUILD
 
-    // Check if user is the guild owner
-    const guild = await rest.get(Routes.guild(guild_id)) as any;
-    const isOwner = member.user.id === guild.owner_id;
+    console.log('Initial perms check:', { isAdmin, canManageGuild });
 
-    // Check for "Mediador" role
-    const roles = await rest.get(Routes.guildRoles(guild_id)) as any[];
+    // Parallelize Guild and Roles fetching
+    const [guildRes, rolesRes] = await Promise.allSettled([
+        rest.get(Routes.guild(guild_id)),
+        rest.get(Routes.guildRoles(guild_id))
+    ]);
+
+    const guild = guildRes.status === 'fulfilled' ? guildRes.value as any : null;
+    const roles = rolesRes.status === 'fulfilled' ? rolesRes.value as any[] : [];
+
+    console.log('Guild/Roles fetched:', { hasGuild: !!guild, rolesCount: roles.length });
+
+    const isOwner = guild ? member.user.id === guild.owner_id : false;
     let mediadorRole = roles.find(r => r.name.toLowerCase() === 'mediador');
 
-    if (!mediadorRole && isOwner) {
-        // Auto-create Mediador role if owner runs the command and it's missing
+    if (!mediadorRole && (isOwner || isAdmin)) {
+        console.log('Mediador role missing, creating...');
         try {
             mediadorRole = await rest.post(Routes.guildRoles(guild_id), {
                 body: { name: 'Mediador', color: 0x3498db, permissions: '0' }
             }) as any;
-            console.log("Created 'Mediador' role.");
         } catch (e) {
-            console.error("Failed to create Mediador role:", e);
+            console.error("Failed to auto-create Mediador role:", e);
         }
     }
 
     const hasMediadorRole = mediadorRole ? member.roles.includes(mediadorRole.id) : false;
 
-    if (!isAdmin && !isOwner && !hasMediadorRole) {
+    if (!isAdmin && !isOwner && !hasMediadorRole && !canManageGuild) {
+        console.log('Permission denied for user:', member.user.id);
         return res.status(200).json({
             type: InteractionResponseType.CHANNEL_MESSAGE_WITH_SOURCE,
             data: {
@@ -81,21 +92,17 @@ export async function handleSetupQueueCommand(req: VercelRequest, res: VercelRes
     // 2. Create the Embed Message
     const embedTitle = `COMBATE ${mode} - ${betValue}MT`;
     const platformText = platform === 'mixed' ? '💻📱 MISTO (EMULADOR + MOBILE)' : '📱 MOBILE ONLY';
-    const color = platform === 'mixed' ? 0xFFA500 : 0x00FF00; // Orange for Mixed, Green for Mobile?
-
-    // Initial Empty State
-    const currentPlayers: string[] = [];
-    const playersListText = "Nenhum jogador na fila.";
+    const color = platform === 'mixed' ? 0xFFA500 : 0x00FF00;
 
     const embed = {
         title: embedTitle,
-        description: `**Plataforma:** ${platformText}\n**Valor:** ${betValue} MT\n**Jogadores:** 0/${requiredPlayers}\n\n${playersListText}\n\nClique no botão abaixo para entrar na fila.`,
+        description: `**Plataforma:** ${platformText}\n**Valor:** ${betValue} MT\n**Jogadores:** 0/${requiredPlayers}\n\nNenhum jogador na fila.\n\nClique no botão abaixo para entrar na fila.`,
         color: color,
         footer: { text: 'Sistema de Filas Automáticas' }
     };
 
     try {
-        // Send message to channel
+        console.log('Sending queue message to channel...');
         const message = await rest.post(Routes.channelMessages(channel_id), {
             body: {
                 embeds: [embed],
@@ -107,7 +114,7 @@ export async function handleSetupQueueCommand(req: VercelRequest, res: VercelRes
                                 type: MessageComponentTypes.BUTTON,
                                 style: ButtonStyleTypes.PRIMARY,
                                 label: 'Entrar na Fila',
-                                custom_id: `join_queue`, // We will append queue_id logic via state or just lookup by message_id
+                                custom_id: `join_queue`,
                                 emoji: { name: '🎮' }
                             },
                             {
@@ -123,7 +130,9 @@ export async function handleSetupQueueCommand(req: VercelRequest, res: VercelRes
             }
         }) as any;
 
-        // 3. Save to Database
+        console.log('Message sent. ID:', message.id);
+        console.log('Inserting into Supabase...');
+
         const { error } = await supabase
             .from('queues')
             .insert([{
@@ -139,26 +148,27 @@ export async function handleSetupQueueCommand(req: VercelRequest, res: VercelRes
             }]);
 
         if (error) {
-            console.error('DB Error:', error);
-            // Delete message if DB fails?
+            console.error('Supabase DB Error:', error);
             await rest.delete(Routes.channelMessage(channel_id, message.id));
             throw error;
         }
+
+        console.log('Queue created successfully in DB.');
 
         return res.status(200).json({
             type: InteractionResponseType.CHANNEL_MESSAGE_WITH_SOURCE,
             data: {
                 content: `✅ Fila **${mode} ${betValue}MT** criada com sucesso!`,
-                flags: 64 // Ephemeral
+                flags: 64
             }
         });
 
-    } catch (e) {
-        console.error(e);
+    } catch (e: any) {
+        console.error('Setup Queue Error Detail:', e);
         return res.status(200).json({
             type: InteractionResponseType.CHANNEL_MESSAGE_WITH_SOURCE,
             data: {
-                content: '❌ Erro ao criar fila.',
+                content: `❌ Erro ao criar fila: ${e.message || 'Erro desconhecido'}`,
                 flags: 64
             }
         });
