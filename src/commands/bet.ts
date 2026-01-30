@@ -50,26 +50,26 @@ export async function handleBetCommand(req: VercelRequest, res: VercelResponse, 
     const blockStatus = await isPlayerBlocked(adminId);
     if (blockStatus.blocked) {
         const untilDate = new Date(blockStatus.until!).toLocaleString('pt-MZ');
-        await rest.post(Routes.webhookMessage(interaction.application_id, interaction.token), {
-            body: {
+        return res.status(200).json({
+            type: InteractionResponseType.CHANNEL_MESSAGE_WITH_SOURCE,
+            data: {
                 content: `❌ Você está bloqueado de criar apostas até **${untilDate}** devido ao acúmulo de faltas.`,
                 flags: 64
             }
         });
-        return;
     }
 
     // 2.2 Active Chat Limit Check (Penalty)
     const chatBanStatus = await checkAndApplyActiveChatBan(adminId);
     if (chatBanStatus.banned) {
         const untilDate = new Date(chatBanStatus.until!).toLocaleString('pt-MZ');
-        await rest.post(Routes.webhookMessage(interaction.application_id, interaction.token), {
-            body: {
+        return res.status(200).json({
+            type: InteractionResponseType.CHANNEL_MESSAGE_WITH_SOURCE,
+            data: {
                 content: `❌ Você foi banido por 1 dia até **${untilDate}** por ter mais de 7 chats ativos sem finalização. Por favor, finalize suas apostas pendentes.`,
                 flags: 64
             }
         });
-        return;
     }
 
     // 2. Extract command options
@@ -84,23 +84,23 @@ export async function handleBetCommand(req: VercelRequest, res: VercelResponse, 
     const estiloSala = estiloSalaOption?.value;
 
     if (!modo || !valor || !modoSala || !estiloSala) {
-        await rest.post(Routes.webhookMessage(interaction.application_id, interaction.token), {
-            body: {
+        return res.status(200).json({
+            type: InteractionResponseType.CHANNEL_MESSAGE_WITH_SOURCE,
+            data: {
                 content: '❌ Todos os campos são obrigatórios.',
                 flags: 64
             }
         });
-        return;
     }
 
     if (valor < 25) {
-        await rest.post(Routes.webhookMessage(interaction.application_id, interaction.token), {
-            body: {
+        return res.status(200).json({
+            type: InteractionResponseType.CHANNEL_MESSAGE_WITH_SOURCE,
+            data: {
                 content: '❌ O valor mínimo da aposta é 25 MZN.',
                 flags: 64
             }
         });
-        return;
     }
 
     try {
@@ -184,22 +184,22 @@ export async function handleBetCommand(req: VercelRequest, res: VercelResponse, 
             });
         }
 
-        await rest.post(Routes.webhookMessage(interaction.application_id, interaction.token), {
-            body: {
+        return res.status(200).json({
+            type: InteractionResponseType.CHANNEL_MESSAGE_WITH_SOURCE,
+            data: {
                 content: `✅ **Aposta criada com sucesso!**\nEla foi postada no canal <#${publicChannel?.id || 'apostas-abertas'}>.`,
                 flags: 64
             }
         });
-        return;
 
     } catch (error) {
         console.error('Error creating bet:', error);
-        await rest.post(Routes.webhookMessage(interaction.application_id, interaction.token), {
-            body: {
+        return res.status(200).json({
+            type: InteractionResponseType.CHANNEL_MESSAGE_WITH_SOURCE,
+            data: {
                 content: '❌ Erro ao criar aposta. Tente novamente.',
                 flags: 64
             }
         });
-        return;
     }
 }

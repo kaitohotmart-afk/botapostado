@@ -9,14 +9,7 @@ export async function handleCommand(req: VercelRequest, res: VercelResponse, int
     const { name } = interaction.data;
 
     if (name === 'apostar') {
-        // CRITICAL: Defer reply BEFORE processing
-        res.status(200).json({
-            type: InteractionResponseType.DEFERRED_CHANNEL_MESSAGE_WITH_SOURCE,
-            data: { flags: 64 }
-        });
-        // Don't return - response already sent
-        await handleBetCommand(req, res, interaction);
-        return;
+        return handleBetCommand(req, res, interaction);
     }
 
     if (name === 'ranking') {
@@ -32,16 +25,8 @@ export async function handleCommand(req: VercelRequest, res: VercelResponse, int
     }
 
     if (name === 'fila') {
-        // CRITICAL: Defer reply BEFORE dynamic import to prevent timeout
-        res.status(200).json({
-            type: InteractionResponseType.DEFERRED_CHANNEL_MESSAGE_WITH_SOURCE,
-            data: { flags: 64 }
-        });
-
-        // Don't return - response already sent
         const { handleSetupQueueCommand } = await import('./setupQueue.js');
-        await handleSetupQueueCommand(req, res, interaction);
-        return;
+        return handleSetupQueueCommand(req, res, interaction);
     }
 
     return res.status(400).json({ error: 'Unknown command' });
