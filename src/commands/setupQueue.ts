@@ -9,6 +9,12 @@ export async function handleSetupQueueCommand(req: VercelRequest, res: VercelRes
     const { member, data, guild_id, channel_id } = interaction;
     console.log('--- SETUP QUEUE START ---');
 
+    // CRITICAL: Defer reply immediately to prevent 3-second timeout
+    res.status(200).json({
+        type: InteractionResponseType.DEFERRED_CHANNEL_MESSAGE_WITH_SOURCE,
+        data: { flags: 64 } // Ephemeral
+    });
+
     // 1. Permission Check (Admin, Owner or Mediador)
     const permissions = BigInt(member.permissions);
     const isAdmin = (permissions & BigInt(8)) !== BigInt(0); // ADMINISTRATOR
@@ -45,13 +51,13 @@ export async function handleSetupQueueCommand(req: VercelRequest, res: VercelRes
 
     if (!isAdmin && !isOwner && !hasMediadorRole && !canManageGuild) {
         console.log('Permission denied for user:', member.user.id);
-        return res.status(200).json({
-            type: InteractionResponseType.CHANNEL_MESSAGE_WITH_SOURCE,
-            data: {
+        await rest.post(Routes.webhookMessage(interaction.application_id, interaction.token), {
+            body: {
                 content: '❌ Apenas Mediadores, Administradores ou o Dono do Servidor podem configurar filas.',
                 flags: 64
             }
         });
+        return;
     }
 
     const modeOption = data.options.find((opt: any) => opt.name === 'mode');
@@ -80,13 +86,13 @@ export async function handleSetupQueueCommand(req: VercelRequest, res: VercelRes
     const requiredPlayers = reqPlayersMap[mode];
 
     if (!requiredPlayers) {
-        return res.status(200).json({
-            type: InteractionResponseType.CHANNEL_MESSAGE_WITH_SOURCE,
-            data: {
+        await rest.post(Routes.webhookMessage(interaction.application_id, interaction.token), {
+            body: {
                 content: '❌ Modo inválido. Use 1x1, 2x2, 3x3 ou 4x4.',
                 flags: 64
             }
         });
+        return;
     }
 
     // 2. Create the Embed Message
@@ -155,22 +161,22 @@ export async function handleSetupQueueCommand(req: VercelRequest, res: VercelRes
 
         console.log('Queue created successfully in DB.');
 
-        return res.status(200).json({
-            type: InteractionResponseType.CHANNEL_MESSAGE_WITH_SOURCE,
-            data: {
+        await rest.post(Routes.webhookMessage(interaction.application_id, interaction.token), {
+            body: {
                 content: `✅ Fila **${mode} ${betValue}MT** criada com sucesso!`,
                 flags: 64
             }
         });
+        return;
 
     } catch (e: any) {
         console.error('Setup Queue Error Detail:', e);
-        return res.status(200).json({
-            type: InteractionResponseType.CHANNEL_MESSAGE_WITH_SOURCE,
-            data: {
+        await rest.post(Routes.webhookMessage(interaction.application_id, interaction.token), {
+            body: {
                 content: `❌ Erro ao criar fila: ${e.message || 'Erro desconhecido'}`,
                 flags: 64
             }
         });
+        return;
     }
 }
