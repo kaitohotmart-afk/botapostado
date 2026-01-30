@@ -30,7 +30,22 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     const signature = req.headers['x-signature-ed25519'] as string;
     const timestamp = req.headers['x-signature-timestamp'] as string;
 
-    const rawBody = await getRawBody(req);
+    console.log('Interaction received:', { signature: !!signature, timestamp: !!timestamp });
+
+    let rawBody = '';
+
+    // Check if body is already present (Express local or Vercel pre-parsed)
+    if ((req as any).rawBody) {
+        rawBody = (req as any).rawBody.toString();
+    } else if (req.body && typeof req.body === 'object') {
+        rawBody = JSON.stringify(req.body);
+    } else {
+        try {
+            rawBody = await getRawBody(req);
+        } catch (e) {
+            console.error('Error reading raw body:', e);
+        }
+    }
 
     const isValidRequest = verifyKey(rawBody, signature, timestamp, process.env.DISCORD_PUBLIC_KEY!);
 
@@ -41,6 +56,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
     try {
         const interaction = JSON.parse(rawBody);
+        console.log('Interaction type:', interaction.id, interaction.type);
 
         if (interaction.type === InteractionType.PING) {
             return res.status(200).json({ type: InteractionResponseType.PONG });

@@ -22,6 +22,8 @@ export async function handleQueueInteraction(req: any, res: any, interaction: an
     const action = custom_id;
 
     try {
+        console.log('Processing queue action:', action, 'for user:', userId);
+
         // 1. Fetch Queue Data
         const { data: queue, error } = await supabase
             .from('queues')
@@ -30,9 +32,10 @@ export async function handleQueueInteraction(req: any, res: any, interaction: an
             .single();
 
         if (error || !queue) {
+            console.error('Queue not found for message:', messageId);
             return res.status(200).json({
                 type: InteractionResponseType.CHANNEL_MESSAGE_WITH_SOURCE,
-                data: { content: '❌ Fila não encontrada no banco de dados. Tente criar uma nova com /fila.', flags: 64 }
+                data: { content: '❌ Fila não encontrada. Crie uma nova com /fila.', flags: 64 }
             });
         }
 
@@ -49,15 +52,19 @@ export async function handleQueueInteraction(req: any, res: any, interaction: an
             if (currentPlayers.length >= queue.required_players) {
                 return res.status(200).json({
                     type: InteractionResponseType.CHANNEL_MESSAGE_WITH_SOURCE,
-                    data: { content: '⚠️ Esta fila acabou de encher!', flags: 64 }
+                    data: { content: '⚠️ Esta fila já lotou!', flags: 64 }
                 });
             }
 
-            // Corrected filter: pass the array directly
-            const { data: activeQueues } = await supabase
+            // check if user is in any OTHER active queue
+            console.log('Checking active queues for user...');
+            const { data: activeQueues, error: checkError } = await supabase
                 .from('queues')
                 .select('id')
-                .contains('current_players', [userId]);
+                .contains('current_players', [userId])
+                .eq('status', 'active');
+
+            if (checkError) console.error('Error checking active queues:', checkError);
 
             if (activeQueues && activeQueues.length > 0) {
                 return res.status(200).json({
@@ -68,6 +75,7 @@ export async function handleQueueInteraction(req: any, res: any, interaction: an
 
             // Update local list and DB
             const updatedPlayers = [...currentPlayers, userId];
+            console.log('Updating queue in DB...');
 
             const { error: updateError } = await supabase
                 .from('queues')
