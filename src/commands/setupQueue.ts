@@ -8,6 +8,12 @@ import { Routes } from 'discord.js';
 export async function handleSetupQueueCommand(req: VercelRequest, res: VercelResponse, interaction: any) {
     const { member, data, guild_id, channel_id } = interaction;
 
+    // ✅ RESPOND IMMEDIATELY - FIRST THING (before ANY checks or operations)
+    res.status(200).json({
+        type: InteractionResponseType.DEFERRED_CHANNEL_MESSAGE_WITH_SOURCE,
+        data: { flags: 64 }
+    });
+
     // 1. Fast Permission Check - use permissions from interaction
     const permissions = BigInt(member.permissions);
     const isAdmin = (permissions & BigInt(8)) !== BigInt(0); // ADMINISTRATOR
@@ -22,24 +28,24 @@ export async function handleSetupQueueCommand(req: VercelRequest, res: VercelRes
             const hasMediadorRole = mediadorRole ? member.roles.includes(mediadorRole.id) : false;
 
             if (!hasMediadorRole) {
-                return res.status(200).json({
-                    type: InteractionResponseType.CHANNEL_MESSAGE_WITH_SOURCE,
-                    data: {
+                await rest.post(Routes.webhookMessage(interaction.application_id, interaction.token), {
+                    body: {
                         content: '❌ Apenas Mediadores, Administradores ou o Dono do Servidor podem configurar filas.',
                         flags: 64
                     }
                 });
+                return;
             }
         } catch (e) {
             console.error('Error checking roles:', e);
             // If role check fails, deny access
-            return res.status(200).json({
-                type: InteractionResponseType.CHANNEL_MESSAGE_WITH_SOURCE,
-                data: {
+            await rest.post(Routes.webhookMessage(interaction.application_id, interaction.token), {
+                body: {
                     content: '❌ Erro ao verificar permissões.',
                     flags: 64
                 }
             });
+            return;
         }
     }
 
@@ -67,23 +73,18 @@ export async function handleSetupQueueCommand(req: VercelRequest, res: VercelRes
     };
 
 
+
     const requiredPlayers = reqPlayersMap[mode];
 
     if (!requiredPlayers) {
-        return res.status(200).json({
-            type: InteractionResponseType.CHANNEL_MESSAGE_WITH_SOURCE,
-            data: {
+        await rest.post(Routes.webhookMessage(interaction.application_id, interaction.token), {
+            body: {
                 content: '❌ Modo inválido. Use 1x1, 2x2, 3x3 ou 4x4.',
                 flags: 64
             }
         });
+        return;
     }
-
-    // ✅ RESPOND IMMEDIATELY to avoid timeout (before slow operations)
-    res.status(200).json({
-        type: InteractionResponseType.DEFERRED_CHANNEL_MESSAGE_WITH_SOURCE,
-        data: { flags: 64 }
-    });
 
     // 2. Create the Embed Message
     const embedTitle = `COMBATE ${mode} - ${betValue}MT`;
