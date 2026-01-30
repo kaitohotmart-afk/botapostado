@@ -139,15 +139,18 @@ export async function handleMatchControl(req: any, res: any, interaction: any) {
         const lossAmount = -betValue;
 
         const { incrementPlayerStats, updatePlayerLevel } = await import('../utils/levels.js');
+        const { sendDM } = await import('../utils/notifications.js');
 
         await Promise.all([
             ...winners.map(uid =>
                 incrementPlayerStats(uid, true, betValue, winProfit)
                     .then(() => updatePlayerLevel(uid, interaction.guild_id))
+                    .then(() => sendDM(uid, `🏆 **Vitória Confirmada!**\nSua partida de ${bet.modo} (${bet.valor} MT) foi finalizada e você venceu! 🎉`))
             ),
             ...losers.map(uid =>
                 incrementPlayerStats(uid, false, betValue, lossAmount)
                     .then(() => updatePlayerLevel(uid, interaction.guild_id))
+                    .then(() => sendDM(uid, `💀 **Fim de Partida**\nSua partida de ${bet.modo} (${bet.valor} MT) foi finalizada. Mais sorte na próxima! ⚔️`))
             )
         ]);
 

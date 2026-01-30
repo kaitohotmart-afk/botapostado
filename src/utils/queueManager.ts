@@ -38,22 +38,24 @@ export async function handleQueueFull(queue: any, players: string[]) {
     const mode = queue.game_mode; // 1x1, 2x2
     const value = queue.bet_value;
 
+    const isManualTeamSelection = mode !== '1x1';
+
     // Teams Logic
-    // If 1x1: P1 vs P2
-    // If 2x2: P1,P2 vs P3,P4 (Simple split for now, maybe random later?)
-    // Simple split:
-    const mid = Math.ceil(players.length / 2);
-    const teamA = players.slice(0, mid);
-    const teamB = players.slice(mid);
+    let teamA: string[] = [];
+    let teamB: string[] = [];
+
+    if (!isManualTeamSelection) {
+        // If 1x1: P1 vs P2 (Auto-split)
+        const mid = Math.ceil(players.length / 2);
+        teamA = players.slice(0, mid);
+        teamB = players.slice(mid);
+    }
 
     const matchName = `${mode}-${value}-match-${Date.now().toString().slice(-4)}`;
 
     // Create Channel
     const permissionOverwrites = [
-        { id: guildId, deny: ['1024'] }, // @everyone: ViewChannel (1024) DENY (Use string '1024' or bitfield)
-        // Bot (self) - implied usually, but good to add
-        // Mediator Role? Need ID. 
-        // Players:
+        { id: guildId, deny: ['1024'] }, // @everyone: ViewChannel (1024) DENY
         ...players.map(pid => ({ id: pid, allow: ['1024', '2048', '32768'] })), // View, Send, Attach Files
     ];
 
@@ -63,8 +65,6 @@ export async function handleQueueFull(queue: any, players: string[]) {
     if (mediatorRole) {
         permissionOverwrites.push({ id: mediatorRole.id, allow: ['1024', '2048', '32768'] });
     }
-
-    // Note: Discord API ViewChannel = 0x400 (1024)
 
     const channel: any = await rest.post(Routes.guildChannels(guildId), {
         body: {
@@ -79,16 +79,16 @@ export async function handleQueueFull(queue: any, players: string[]) {
     const { data: bet, error } = await supabase.from('bets').insert([{
         modo: mode,
         valor: value,
-        status: 'em_jogo', // Directly to in-game? Or 'aguardando' confirmation? 
-        // User says: "O bot cria um canal privado de aposta... Remove os jogadores da fila... Reseta".
-        // "Assim que o canal for criado, o bot deve... Enviar uma mensagem inicial... Botões... Finalizar/Cancelar".
-        // Implies we are live.
-        jogador1_id: teamA[0], // Captains
-        jogador2_id: teamB[0],
-        players_data: { teamA, teamB },
+        status: isManualTeamSelection ? 'aguardando' : 'em_jogo',
+        jogador1_id: players[0], // Captains (proxy)
+        jogador2_id: isManualTeamSelection ? null : players[1],
+        players_data: {
+            pool: players, // All authorized players
+            teamA,
+            teamB
+        },
         queue_id: queue.id,
-        channel_pagamento_id: channel.id // Storing channel ID here loosely or make new column? 
-        // Schema has 'canal_pagamento_id' - reusable for this channel ID.
+        channel_pagamento_id: channel.id
     }]).select().single();
 
     if (error) {
@@ -96,46 +96,86 @@ export async function handleQueueFull(queue: any, players: string[]) {
         await rest.post(Routes.channelMessages(channel.id), { body: { content: "⚠️ Erro ao registrar aposta no banco de dados. Contate um admin." } });
     }
 
-    // 5. Send Control Panel to Channel
+    // 5. Send Initial Message
     const playersMentions = players.map(p => `<@${p}>`).join(' ');
 
-    await rest.post(Routes.channelMessages(channel.id), {
-        body: {
-            content: `${playersMentions}\n**Aposta Criada!**\nModo: ${mode}\nValor: ${value}MT`,
-            embeds: [{
-                title: "Painel da Aposta",
-                description: "Use os botões abaixo para gerenciar a partida.\nApenas **Mediadores** ou **Admins** podem usar estes botões.",
-                color: 0x3498db,
-                fields: [
-                    { name: 'Time A', value: teamA.map(p => `<@${p}>`).join('\n'), inline: true },
-                    { name: 'Time B', value: teamB.map(p => `<@${p}>`).join('\n'), inline: true },
-                ]
-            }],
-            components: [
-                {
-                    type: MessageComponentTypes.ACTION_ROW,
-                    components: [
-                        {
-                            type: MessageComponentTypes.BUTTON,
-                            style: ButtonStyleTypes.SUCCESS,
-                            label: 'Finalizar Aposta',
-                            custom_id: `match_finalize:${bet?.id}`,
-                            emoji: { name: '✅' }
-                        },
-                        {
-                            type: MessageComponentTypes.BUTTON,
-                            style: ButtonStyleTypes.DANGER,
-                            label: 'Cancelar Aposta',
-                            custom_id: `match_cancel:${bet?.id}`,
-                            emoji: { name: '❌' }
-                        }
+    if (isManualTeamSelection) {
+        // Team Selection Interface
+        await rest.post(Routes.channelMessages(channel.id), {
+            body: {
+                content: `${playersMentions}\n**Aposta Criada! Modo ${mode} - ${value}MT**`,
+                embeds: [{
+                    title: "⚔️ Seleção de Times",
+                    description: "Como esta é uma partida em equipe, vocês devem decidir em qual time cada um vai ficar.\n\nClique no botão correspondente ao seu time abaixo.",
+                    color: 0x3498db,
+                    fields: [
+                        { name: '🔵 Time A', value: 'Nenhum jogador', inline: true },
+                        { name: '🔴 Time B', value: 'Nenhum jogador', inline: true },
                     ]
-                }
-            ]
-        }
-    });
+                }],
+                components: [
+                    {
+                        type: MessageComponentTypes.ACTION_ROW,
+                        components: [
+                            {
+                                type: MessageComponentTypes.BUTTON,
+                                style: ButtonStyleTypes.PRIMARY,
+                                label: 'Entrar no Time A',
+                                custom_id: `join_team:A:${bet?.id}`,
+                                emoji: { name: '🔵' }
+                            },
+                            {
+                                type: MessageComponentTypes.BUTTON,
+                                style: ButtonStyleTypes.DANGER,
+                                label: 'Entrar no Time B',
+                                custom_id: `join_team:B:${bet?.id}`,
+                                emoji: { name: '🔴' }
+                            }
+                        ]
+                    }
+                ]
+            }
+        });
+    } else {
+        // Default Control Panel for 1x1
+        await rest.post(Routes.channelMessages(channel.id), {
+            body: {
+                content: `${playersMentions}\n**Aposta Criada!**\nModo: ${mode}\nValor: ${value}MT`,
+                embeds: [{
+                    title: "Painel da Aposta",
+                    description: "Use os botões abaixo para gerenciar a partida.\nApenas **Mediadores** ou **Admins** podem usar estes botões.",
+                    color: 0x3498db,
+                    fields: [
+                        { name: 'Time A', value: teamA.map(p => `<@${p}>`).join('\n'), inline: true },
+                        { name: 'Time B', value: teamB.map(p => `<@${p}>`).join('\n'), inline: true },
+                    ]
+                }],
+                components: [
+                    {
+                        type: MessageComponentTypes.ACTION_ROW,
+                        components: [
+                            {
+                                type: MessageComponentTypes.BUTTON,
+                                style: ButtonStyleTypes.SUCCESS,
+                                label: 'Finalizar Aposta',
+                                custom_id: `match_finalize:${bet?.id}`,
+                                emoji: { name: '✅' }
+                            },
+                            {
+                                type: MessageComponentTypes.BUTTON,
+                                style: ButtonStyleTypes.DANGER,
+                                label: 'Cancelar Aposta',
+                                custom_id: `match_cancel:${bet?.id}`,
+                                emoji: { name: '❌' }
+                            }
+                        ]
+                    }
+                ]
+            }
+        });
+    }
 
-    // Ping Mediator
+    // Ping Mediator (Optional)
     if (mediatorRole) {
         await rest.post(Routes.channelMessages(channel.id), {
             body: { content: `<@&${mediatorRole.id}> Uma nova aposta requer supervisão.` }

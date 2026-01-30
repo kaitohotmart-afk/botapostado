@@ -1,6 +1,7 @@
 import { VercelRequest, VercelResponse } from '@vercel/node';
 import { InteractionResponseType } from 'discord-interactions';
 import { supabase } from '../utils/supabase.js';
+import { getLevelProgress, getPlayerBadges } from '../utils/notifications.js';
 
 export async function handleProfileCommand(req: VercelRequest, res: VercelResponse, interaction: any) {
     const { member, data } = interaction;
@@ -21,7 +22,7 @@ export async function handleProfileCommand(req: VercelRequest, res: VercelRespon
 
     try {
         const { data: player, error } = await supabase
-            .from('players')
+            .from('player_levels')
             .select('*')
             .eq('discord_id', targetId)
             .single();
@@ -35,22 +36,25 @@ export async function handleProfileCommand(req: VercelRequest, res: VercelRespon
             throw error;
         }
 
+        const progress = getLevelProgress(player?.total_bets || 0);
+        const badges = getPlayerBadges(player || {});
+
         return res.status(200).json({
             type: InteractionResponseType.CHANNEL_MESSAGE_WITH_SOURCE,
             data: {
                 embeds: [
                     {
-                        title: `📊 Perfil de ${player.nome}`,
+                        title: `📊 Perfil de ${targetName}`,
+                        description: `**Nível ${player.level.toUpperCase()}**\n${progress.bar}\n*Faltam ${progress.total - progress.current} partidas para o próximo nível.*`,
                         color: 0x3498DB, // Blue
                         fields: [
-                            { name: '🏆 Vitórias', value: player.vitorias.toString(), inline: true },
-                            { name: '💀 Derrotas', value: player.derrotas.toString(), inline: true },
-                            { name: '🎮 Partidas', value: player.partidas_jogadas.toString(), inline: true },
-                            { name: '💰 Total Apostado', value: `${player.total_apostado} MZN`, inline: true },
-                            { name: '💵 Total Ganho', value: `${player.total_ganho} MZN`, inline: true },
-                            { name: '📈 Lucro', value: `${player.saldo_lucro} MZN`, inline: true }
+                            { name: '🏆 Vitórias', value: player.total_wins.toString(), inline: true },
+                            { name: '💀 Derrotas', value: player.total_losses.toString(), inline: true },
+                            { name: '🔥 Nível', value: player.level.toUpperCase(), inline: true },
+                            { name: '💰 Lucro', value: `${player.total_profit} MT`, inline: true },
+                            { name: '🏅 Conquistas', value: badges, inline: false }
                         ],
-                        thumbnail: { url: `https://cdn.discordapp.com/avatars/${targetId}/${member.user.avatar}.png` } // Avatar might be wrong if target is not caller, but good enough for MVP
+                        thumbnail: { url: `https://cdn.discordapp.com/avatars/${targetId}/${member.user.avatar}.png` }
                     }
                 ]
             }

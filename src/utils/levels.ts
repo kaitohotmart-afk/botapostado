@@ -3,7 +3,7 @@ import { rest } from './discord.js';
 import { Routes } from 'discord.js';
 
 // Level configuration
-const LEVELS = {
+export const LEVELS = {
     BRONZE: { name: 'bronze', minBets: 0, roleName: 'Bronze' },
     PRATA: { name: 'prata', minBets: 30, roleName: 'Prata' },
     OURO: { name: 'ouro', minBets: 50, roleName: 'Ouro' },

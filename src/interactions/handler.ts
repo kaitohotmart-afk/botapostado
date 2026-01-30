@@ -48,6 +48,11 @@ export async function handleComponent(req: VercelRequest, res: VercelResponse, i
         return handleQueueInteraction(req, res, interaction);
     }
 
+    if (custom_id.startsWith('join_team:')) {
+        const { handleTeamSelection } = await import('./teamSelection.js');
+        return handleTeamSelection(req, res, interaction);
+    }
+
     if (custom_id.startsWith('match_') || ((custom_id.startsWith('win_team_a') || custom_id.startsWith('win_team_b')) && !custom_id.includes(':select_winner:'))) {
         // match_finalize, match_cancel, win_team_a, win_team_b
         const { handleMatchControl } = await import('./matchControl.js');
