@@ -21,7 +21,7 @@ Admins create permanent queues (messages) in channels, and players join them. Wh
 
 ### 1. Create a Queue
 Run the following command in a channel:
-`/setup_queue mode:1x1 value:50 type:mobile`
+`/fila mode:1x1 value:50 platform:mobile`
 
 - This will create an embed message with "Entrar na Fila" button.
 

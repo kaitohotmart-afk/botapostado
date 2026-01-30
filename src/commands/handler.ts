@@ -19,7 +19,7 @@ export async function handleCommand(req: VercelRequest, res: VercelResponse, int
         return handleProfileCommand(req, res, interaction);
     }
 
-    if (name === 'setup_queue') {
+    if (name === 'fila') {
         const { handleSetupQueueCommand } = await import('./setupQueue.js');
         return handleSetupQueueCommand(req, res, interaction);
     }

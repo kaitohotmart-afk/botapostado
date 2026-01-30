@@ -58,7 +58,7 @@ const commands = [
                 .setRequired(false)
         ),
     new SlashCommandBuilder()
-        .setName('setup_queue')
+        .setName('fila')
         .setDescription('Configura uma fila automática (Admin)')
         .setDefaultMemberPermissions('8') // Administrator
         .addStringOption(option =>
@@ -94,10 +94,20 @@ const rest = new REST({ version: '10' }).setToken(process.env.DISCORD_TOKEN!);
     try {
         console.log('Started refreshing application (/) commands.');
 
-        await rest.put(
-            Routes.applicationCommands(process.env.DISCORD_APP_ID!),
-            { body: commands },
-        );
+        if (process.env.GUILD_ID) {
+            console.log(`Registering commands for Guild ID: ${process.env.GUILD_ID}`);
+            await rest.put(
+                Routes.applicationGuildCommands(process.env.DISCORD_APP_ID!, process.env.GUILD_ID),
+                { body: commands },
+            );
+        } else {
+            console.log('Registering Global Commands (may take up to 1 hour to update).');
+            console.log('Tip: Add GUILD_ID to your .env to update instantly.');
+            await rest.put(
+                Routes.applicationCommands(process.env.DISCORD_APP_ID!),
+                { body: commands },
+            );
+        }
 
         console.log('Successfully reloaded application (/) commands.');
     } catch (error) {
